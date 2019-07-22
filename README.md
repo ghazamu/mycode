@@ -1,3 +1,4 @@
+Learning version controll through GITHUB
 # mycode (Python Basics 7/22/2019)
 
 This repo will be used for a Python basics training offered to me by my employer
@@ -14,4 +15,6 @@ Python
 ## Autors
 
 Muhammad Ghazanfar
+
+
 
