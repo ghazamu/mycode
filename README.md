@@ -1,4 +1,17 @@
-# mycode
-Learning to track my code
-This repo is used to write scripts to learn python.
-This repo is also used to test code for Network Automation
+# mycode (Python Basics 7/22/2019)
+
+This repo will be used for a Python basics training offered to me by my employer
+
+## Getting Started
+
+
+### Prerequisites
+
+## Built with
+
+Python
+
+## Autors
+
+Muhammad Ghazanfar
+
