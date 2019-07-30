@@ -5,8 +5,8 @@ import datetime
 from pprint import pprint as pp
 
 timestamp = datetime.datetime.now().strftime('%Y-%m-%d%H:%M:%S')
-pub_key = '334df4cf3040a3723167ff89ba156a42'
-priv_key = '82a66b2a7a5670869de6684023931a6bc88a89ab'
+pub_key = 
+priv_key = 
 
 
 def hash_params():
