@@ -1,0 +1,11 @@
+#!/usr/bin/python3
+
+import requests
+
+
+res = requests.get("http://api.open-notify.org/astros.json")
+
+res_json = res.json()
+
+
+with open("")
