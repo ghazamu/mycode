@@ -19,7 +19,7 @@ def showStatus(rooms, inventory, currentroom):
 	print('---------------------')
 	print('You are in the ' + currentroom)
 	print('Inventory: ' + str(inventory))
-	print(rooms[currentroom]['item'])
+	#print(rooms[currentroom]['item'])
 	if "item" in rooms[currentroom]:
 		for i in rooms[currentroom]['item']:
 			print('You see a ' + i)
@@ -34,16 +34,41 @@ def play(rooms, inventory, currentroom):
 	
 		showStatus(rooms,inventory,currentroom)
 		move = ''
+		battle = ''
 		while move == '':
-			move = input('Whats your move? > ')
+			move = input('> ')
+			
 	
 		move = move.lower().split()
+
 		
 		if move[0] == 'go':
 			if move[1] in rooms[currentroom]:
 				currentroom = rooms[currentroom][move[1]]
+
+
+				if "boss" in rooms[currentroom]:
+					print('''
+						BATTLE MODE!
+						
+						MAKE YOUR MOVE
+						1- use [item]
+						2- run [direction] ''')
+
+					while battle=='':
+						battle = input('>')
+					battle = battle.lower().split()
+
+					if battle[0] == 'run':
+						if battle[1] in rooms[currentroom]:
+							print("Running away....")
+							currentroom = rooms[currentroom][battle[1]]
+						else:
+							print("YOU CAN'T DO THAT!!")
+							battle = ''
 			else:
 				print("You can't go that way!")
+		
 		if move[0] == 'get':
 			if "item" in rooms[currentroom]:
 				for i in range(len(rooms[currentroom]['item'])):
@@ -86,7 +111,8 @@ def main():
 		
 		'Kitchen': {
 			'north':'Hall', 
-			'item':['monster']
+			'item':[],
+			'boss':'monster'
 			}, 
 		
 		'Dinning Room':{
@@ -97,7 +123,15 @@ def main():
 	
 		'Garden':{
 			'north':'Dinning Room',
+			'east':'Dungeon',
 			'item' :['sword']
+			},
+
+		'Dungeon':{
+			'west':'Garden',
+			'boss':'dragon',
+			'item':[]	
+			
 			}
 		}
 	
