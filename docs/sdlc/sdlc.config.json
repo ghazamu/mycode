@@ -4,7 +4,8 @@
   "defaultBranch": "main",
   "humanGates": [
     "spec_pr_merge",
-    "code_pr_merge"
+    "code_pr_merge",
+    "release_pr_merge"
   ],
   "maxDevs": 3,
   "heartbeatMinutes": 10,
@@ -121,7 +122,8 @@
         "docs/**",
         "README.md",
         "CHANGELOG.md",
-        ".github/**"
+        ".github/**",
+        "version files (release PRs only)"
       ],
       "mayApplyFixes": [
         "lint",
@@ -140,10 +142,50 @@
   ],
   "deepReview": {
     "reviewer": "lead",
-    "labels": [
-      "risk:high"
-    ],
-    "paths": []
+    "model": "claude-opus-5-5",
+    "label": "review:opus",
+    "after": "qa-approval",
+    "requiresLeadApprovalBeforeMerge": true,
+    "when": {
+      "all": [
+        {
+          "any": [
+            "label size:L",
+            "changedLines > 400"
+          ]
+        },
+        {
+          "any": [
+            "majorInfrastructure",
+            "label feature:major"
+          ]
+        }
+      ]
+    },
+    "majorInfrastructure": {
+      "labels": [
+        "infra:major"
+      ],
+      "paths": [
+        ".github/workflows/**",
+        "**/Dockerfile*",
+        "**/docker-compose*.yml",
+        "infra/**",
+        "deploy/**",
+        "terraform/**",
+        "**/migrations/**"
+      ],
+      "also": [
+        "new services",
+        "major-version dependency upgrades"
+      ]
+    },
+    "majorFeature": {
+      "labels": [
+        "feature:major"
+      ],
+      "definition": "new user-facing capability, cross-lane epic, or new public API"
+    }
   },
   "blockedForAllRoles": [
     "mcp__github__merge_pull_request",
@@ -178,5 +220,16 @@
     ],
     "laneOwnershipDeclaredIn": "spec section \"Lane ownership\"",
     "warnOnOutOfLaneEdit": true
+  },
+  "release": {
+    "approval": "user merges release PR",
+    "branchPattern": "release/vX.Y.Z",
+    "versioning": "semver",
+    "preparedBy": "ops",
+    "triggeredBy": "lead",
+    "tagOnlyAfterMerge": true,
+    "modBlocks": [
+      "git tag / create release on a commit that is not the merge commit of a merged release/* PR"
+    ]
   }
 }

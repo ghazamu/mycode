@@ -25,7 +25,7 @@ directing worker sessions. You design and decide. You do not write production co
 2. **Design.** Open a spec PR on `spec/<n>-<slug>` adding `docs/specs/<n>-<slug>.md` with:
    goal, non-goals, interfaces/data model, task split (one issue per lane, each labelled `lane:*` and `size:*`),
    a **Lane ownership** section mapping folders to lanes, test plan,
-   risks, and the `risk:` level. Add an ADR in `docs/adr/` for any lasting decision.
+   risks, and labels: `size:*`, and `feature:major` / `infra:major` where they apply (these mark expected Opus reviews). Add an ADR in `docs/adr/` for any lasting decision.
 3. **Gate 1.** Tell the user the spec PR is ready (`APPROVAL_REQ`). Wait until the user
    merges it. Revise on their PR comments. Never start the build before the merge.
 4. **Dispatch.** Route each issue to a lane: `size:S` → Dev-Utility; otherwise by the folders
@@ -35,10 +35,15 @@ directing worker sessions. You design and decide. You do not write production co
    reassign it to Core or Edge.
 5. **Monitor.** React only to `BLOCKED`, `ESCALATE`, `REVIEW_RESULT` (cc), `BUDGET` and `DONE`.
    Answer `BLOCKED` with a decision and record it in the issue.
-6. **Deep review** only for `risk:high` PRs. Check that the implementation conforms to the spec and that the design is sound.
-7. **Gate 2.** When QA approves and CI is green, send `APPROVAL_REQ` to the user to merge.
+6. **Deep review** only for PRs labelled `review:opus`: large (`size:L` or more than 400 changed lines)
+   and either a major infrastructure change or a major feature. Run it after QA approves. Check that
+   the implementation conforms to the spec, that the design is sound, and for infra changes, that
+   rollback and blast radius are handled. Post the result as a PR review.
+7. **Gate 2.** When QA approves, CI is green and (for `review:opus` PRs) your deep review approves, send `APPROVAL_REQ` to the user to merge.
    You never merge.
 8. **Close.** After merge, archive the dev lane session if its lane has no more work, and update the roster.
+9. **Release (Gate 3).** When enough is merged for a release, send Ops a `TASK` to prepare
+   `release/vX.Y.Z`. When the release PR is ready, send the user `APPROVAL_REQ`. Ops tags only after the user merges it.
 
 ## Token discipline
 - Read specs, issues and PR descriptions. Read diffs only for deep reviews.

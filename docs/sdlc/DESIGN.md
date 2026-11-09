@@ -1,7 +1,7 @@
 # Multi-Session Claude SDLC — Design
 
 **Status:** Draft v1 · **Runtime:** Claude Code cloud sessions · **Shared state:** GitHub
-**Human gates:** you approve every plan and every merge
+**Human gates:** you approve every plan, every merge and every release
 
 This document describes a software development lifecycle (SDLC) in which a small team
 of Claude Code cloud sessions works together like a dev team. Each session has its own
@@ -16,7 +16,7 @@ session bus. GitHub stays the single source of truth for every artifact.
 |---|---|
 | **Token efficiency** | Messages carry *pointers* (issue #, PR #, SHA, file path), never pasted content. The mod handles acks and heartbeats without waking the model. Each role gets the cheapest model that does the job well. Short-lived worker sessions keep contexts small. |
 | **Quality** | Opus plans and makes the architecture calls. Every PR gets a separate test-and-review pass. Escalation path: Haiku → Sonnet → Opus. |
-| **Human control** | Two hard gates (plan approval and merge). Agents can never merge or push to `main`; the mod blocks those calls. |
+| **Human control** | Three hard gates (plan approval, merge and release). Agents can never merge or push to `main`; the mod blocks those calls. |
 | **Traceability** | Every task is a GitHub issue, every plan is a spec PR, every change is a PR, every decision is an ADR. Bus messages always cite those IDs. |
 | **Resilience** | Sessions are stateless apart from what is in GitHub, so any session can be archived and recreated from the roster and the issue history. |
 
@@ -79,8 +79,14 @@ Haiku (Ops / Dev-Utility) ──can't fix in 1 attempt──▶ Sonnet (Dev-Core
   goes to the PR's Dev.
 - Dev escalates to the Lead after 2 failed attempts at one problem, or on any question
   about an interface or schema.
-- QA can request an **Opus deep review** (the Lead reviews) for PRs labelled
-  `risk:high`, which covers security, auth, data migrations and public API changes.
+- **Opus deep review** (the Lead reviews, after QA approves) is required for PRs that are
+  large (`size:L`, or more than 400 changed lines) **and** either a
+  **major infrastructure change** (CI/CD workflows, deployment or infrastructure-as-code,
+  Dockerfiles, database schema or migrations, new services, major-version dependency upgrades)
+  or a **major feature** (issue labelled `feature:major`: a new user-facing capability, an epic
+  spanning lanes, or a new public API). Such PRs are labelled `review:opus`.
+  The Lead marks expected cases at spec time; QA applies the label when it sees a PR matches.
+  All other PRs get QA's Sonnet review only.
 
 ---
 
@@ -153,7 +159,7 @@ It does not replace the native bus. It wraps it, adding structure and enforcemen
 | `mcp__devbus__bus_roster`, `bus_board` | Read-only views of the roster and open tasks, so the model never has to "ask around". |
 | `session.send` | Rejects free-form or oversized messages: no valid envelope, or `summary` over 600 chars, gives `isDelivered:false`. This forces pointers instead of pasted code. Also scrubs anything that looks like a secret. |
 | `session.receive` | Parses incoming envelopes and updates the Team Board state. **Consumes** (`{ consumed }`) `HEARTBEAT`, duplicate (same `id`) and pure `ACK` messages, so they never cost a model turn. Messages that need work are rewritten to a short normalized form before the model reads them. |
-| `tool.call` guards | Blocks `merge_pull_request`, `enable_pr_auto_merge`, any push to `main`/`master`, and `--force` pushes for **every** role. Per role: Ops may only write under `docs/`, `CHANGELOG.md`, `.github/` and lint fixes. QA may not edit `src/` except test files. Only the Lead may call `create_session` / `archive_session`. |
+| `tool.call` guards | Blocks `merge_pull_request`, `enable_pr_auto_merge`, any push to `main`/`master`, and `--force` pushes for **every** role. Blocks `git tag` and release creation unless the target is the merge commit of a merged `release/*` PR. Per role: Ops may only write under `docs/`, `CHANGELOG.md`, `.github/` and lint fixes. QA may not edit `src/` except test files. Only the Lead may call `create_session` / `archive_session`. |
 | `session.measure` | Watches context and rate-limit usage. Past 70% context it shows a toast suggesting `/compact`. Past the per-session budget it sends `BUDGET` to the Lead. |
 | `ui` | **Team Board pane**: roster, each session's current task, status, last heartbeat, and pending approvals. **Status line**: `role · #issue · state`. **Toast** on `BLOCKED` or `APPROVAL_REQUEST`. |
 | Commands | `/bus` (board), `/handoff <role> <#ref>`, `/blocked <reason>`, `/roster`, `/approve <#pr>` (Lead only, which relays your approval). |
@@ -188,7 +194,7 @@ One line of header, then at most 600 chars of summary. Pointers only.
 | `REVIEW_RESULT` | QA → Dev, cc Lead | `approve` or `changes` (details in PR review comments) | Yes |
 | `CI_FAIL` | Ops → Dev | CI failed on PR #M. Job and log line refs only | Yes |
 | `ESCALATE` | any → next tier | Can't solve, see path in §2 | Yes |
-| `APPROVAL_REQ` | Lead → You (via chat + PR) | Spec PR or code PR ready for your gate | — |
+| `APPROVAL_REQ` | Lead → You (via chat + PR) | Spec PR, code PR or release PR ready for your gate | — |
 | `DONE` | worker → Lead | Task finished, PR merged | Yes (Lead) |
 | `HEARTBEAT` | any → Lead | Alive + current task | No |
 | `BUDGET` | mod → Lead | Session hit its token budget | Yes |
@@ -223,10 +229,16 @@ sequenceDiagram
     Q->>D: REVIEW_RESULT changes / approve
     Q-->>L: cc REVIEW_RESULT
     O->>GH: Changelog + docs commit on PR #M
-    L->>GH: Design conformance check (only for risk:high)
+    L->>GH: Opus deep review (only for review:opus PRs)
     L-->>You: APPROVAL_REQ: merge PR #M
     You->>GH: Merge  ⟵ GATE 2
-    O->>GH: Post-merge: release notes, close issue
+    O->>GH: Post-merge: close issue, update CHANGELOG Unreleased
+    Note over L,O: When a release is due
+    L->>O: TASK release vX.Y.Z
+    O->>GH: Open release PR (version bump, CHANGELOG, release notes)
+    L-->>You: APPROVAL_REQ: release PR
+    You->>GH: Merge release PR  ⟵ GATE 3
+    O->>GH: Tag vX.Y.Z on the merge commit + publish GitHub release
     L->>D: archive Dev lane session
 ```
 
@@ -241,7 +253,7 @@ sequenceDiagram
 | 5. Test & review | QA | Test commits + PR review (approve or changes) | QA approval required |
 | 6. Docs | Ops (scribe) | `CHANGELOG.md`, README/docs updates on the same PR | — |
 | 7. Merge | **You** | Merged PR | **You merge** |
-| 8. Release | Ops | Tag, release notes, issue closed, Lead notified with `DONE` | Optional: you approve the release |
+| 8. Release | Lead decides when; Ops prepares | Release PR `release/vX.Y.Z` (version bump, `CHANGELOG.md`, release notes). After merge: tag + GitHub release | **You approve and merge the release PR** |
 
 ### 5.2 How you approve
 
@@ -250,6 +262,9 @@ sequenceDiagram
   it) revises.
 - **Merge approval = you clicking Merge** on the code PR. Agents are blocked from
   merging by the mod and by branch protection.
+- **Release approval = merging the release PR.** Ops tags and publishes only after you
+  merge it. The DevBus mod blocks tagging and release creation on any commit that is not
+  the merge commit of an approved `release/*` PR.
 - You can always talk to the Lead directly in the Claude app ("pause Dev-Edge", "re-plan #14").
 
 ### 5.3 Token-saving rules (enforced by the mod or role prompts)
@@ -260,7 +275,7 @@ sequenceDiagram
 4. **Fresh contexts per task.** Dev lane sessions are created when their lane has work and archived after merge. Standing sessions `/compact` with "keep: roster, open tasks" between features.
 5. **Stable prompts = cache hits.** Role prompts are passed once via `append_system_prompt` and never edited mid-session, so the prompt prefix stays cacheable.
 6. **Cheap exploration.** Dev and QA use Haiku `Explore` subagents for codebase search and keep only the conclusions.
-7. **Lead reads diffs sparingly.** It reviews specs and `risk:high` PRs only. QA covers the rest.
+7. **Lead reads diffs sparingly.** It reviews specs and `review:opus` PRs only. QA covers the rest.
 8. **CI logs.** Ops passes job name + failing test + log line range, never full logs.
 
 ### 5.4 Expected token split (rough guide)
@@ -282,9 +297,9 @@ the work that most affects quality (design and hard reviews) stays on Opus.
 
 | Item | Convention |
 |---|---|
-| Labels | `lane:core` `lane:edge` `lane:utility` · `size:S` `size:M` `size:L` · `role:qa` `role:ops` · `state:planned` `state:in-progress` `state:review` `state:blocked` · `risk:high` · `needs-approval` |
+| Labels | `lane:core` `lane:edge` `lane:utility` · `size:S` `size:M` `size:L` · `role:qa` `role:ops` · `state:planned` `state:in-progress` `state:review` `state:blocked` · `review:opus` `feature:major` `infra:major` · `release` · `needs-approval` |
 | Branches | `spec/<n>-<slug>` (Lead), `feat/<n>-<slug>` / `fix/<n>-<slug>` (Dev) |
-| PR body | `Closes #n`, spec link, test plan, `risk:` label |
+| PR body | `Closes #n`, spec link, test plan, size and any `review:opus` / `infra:major` / `feature:major` labels |
 | Branch protection on `main` | 1 human approval, required CI checks, no force push |
 | Docs | `docs/specs/`, `docs/adr/`, `CHANGELOG.md` (Keep a Changelog) |
 | Roster | Pinned issue "DevBus roster" (Lead updates it) |
@@ -321,10 +336,9 @@ the work that most affects quality (design and hard reviews) stays on Opus.
 ## 9. Open decisions (for you)
 
 1. **Dev concurrency cap.** Decided: 3, one session per lane (Core, Edge, Utility).
-2. **Release gate.** Should releases and tags also need your approval, or can Ops tag
-   after merge?
-3. **Opus deep-review scope.** Is `risk:high` only right, or should every PR touching
-   certain paths (e.g. `auth/`, `migrations/`) get an Opus review?
+2. **Release gate.** Decided: every release needs your approval (merge of the release PR).
+3. **Opus deep-review scope.** Decided: large PRs that are major infrastructure changes or
+   major features (see §2).
 4. **Build the DevBus mod next?** This document is the design. Next steps would be building
    `tools/devbus/` (mod + tests) and a sample feature run on `flaskapi/`.
 
