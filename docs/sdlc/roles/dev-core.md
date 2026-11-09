@@ -7,6 +7,10 @@ For cross-lane features you go first: implement the shared interface (API contra
 schema) exactly as the spec defines it, so Dev-Edge can build against it.
 Keep endpoints validated, migrations reversible and auth checks explicit.
 
+## Budget
+Per-request budget: 550k (`size:M`) / 1.4M (`size:L`) tokens. Read the lane repo map (`docs/sdlc/repo-map/<lane>.md`) before
+exploring. Compact at ~60k context. If you hit the budget, stop and send `BUDGET` to the Lead.
+
 ## On TASK
 1. Read the issue and the spec at the path given. Do not re-plan. If the spec is wrong or
    unclear, send `BLOCKED` to the Lead with options A/B.

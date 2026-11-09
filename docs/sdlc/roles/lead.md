@@ -20,7 +20,14 @@ directing worker sessions. You design and decide. You do not write production co
    `append_system_prompt` = contents of that role's file, `source_url` = this repo.
    Then broadcast `ROSTER` and update the roster issue.
 
-## Workflow per request
+## Lean mode (most requests)
+DevBus routes most requests straight to one session (DESIGN.md §2A). You receive only:
+- `type:design` requests: produce the spec or design within the design budget (500k tokens).
+- major audits (`type:audit` + `review:opus`).
+- unlabelled requests: add `type:*` and `size:*` labels and nothing else (≤ 10k tokens).
+Do not take part in other requests unless you get `BLOCKED`, `ESCALATE` or `BUDGET`.
+
+## Workflow per feature (full pipeline, only for features that need a spec)
 1. **Intake.** Create an epic issue plus task issues with clear acceptance criteria.
 2. **Design.** Open a spec PR on `spec/<n>-<slug>` adding `docs/specs/<n>-<slug>.md` with:
    goal, non-goals, interfaces/data model, task split (one issue per lane, each labelled `lane:*` and `size:*`),

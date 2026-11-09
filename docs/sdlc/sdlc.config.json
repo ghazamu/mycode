@@ -231,5 +231,151 @@
     "modBlocks": [
       "git tag / create release on a commit that is not the merge commit of a merged release/* PR"
     ]
+  },
+  "mode": "lean",
+  "requestRouting": {
+    "routedBy": "devbus-mod (deterministic, no model turn)",
+    "rules": [
+      {
+        "labels": [
+          "type:design"
+        ],
+        "to": "lead"
+      },
+      {
+        "labels": [
+          "type:dev",
+          "size:S"
+        ],
+        "to": "dev-utility",
+        "batch": true
+      },
+      {
+        "labels": [
+          "type:dev",
+          "size:M|size:L"
+        ],
+        "to": "dev-core|dev-edge",
+        "by": "lane paths"
+      },
+      {
+        "labels": [
+          "type:test"
+        ],
+        "to": "qa"
+      },
+      {
+        "labels": [
+          "type:audit"
+        ],
+        "to": "qa"
+      },
+      {
+        "labels": [
+          "type:audit",
+          "review:opus"
+        ],
+        "to": "lead"
+      },
+      {
+        "labels": [
+          "type:docs"
+        ],
+        "to": "ops"
+      },
+      {
+        "labels": [
+          "<no type label>"
+        ],
+        "to": "lead",
+        "purpose": "label only",
+        "maxTokens": 10000
+      }
+    ],
+    "fullPipelineOnlyFor": "features needing a spec (size:M/L feature work)"
+  },
+  "lean": {
+    "smallDevSkipsQASession": true,
+    "smallDevReview": "haiku diff check + CI + human merge",
+    "batchSmallMax": 10,
+    "qaContextCapTokens": 30000,
+    "opsScripted": [
+      "changelog from PR titles",
+      "CI checks"
+    ],
+    "opsModelOnly": [
+      "CI failure triage",
+      "real docs edits"
+    ],
+    "compactAtTokens": 60000,
+    "repoMapPath": "docs/sdlc/repo-map/<lane>.md",
+    "freshSessionPerUnrelatedRequest": true
+  },
+  "budgets": {
+    "perRequestTokens": {
+      "size:S": 300000,
+      "size:M": 550000,
+      "size:L": 1400000,
+      "type:design": 500000
+    },
+    "warnAt": 0.8,
+    "onExceed": "stop and send BUDGET/ESCALATE"
+  },
+  "costModel": {
+    "status": "estimate - calibrate with pilot",
+    "baseline": {
+      "requests": 2500,
+      "days": 7,
+      "tokens": 1160000000,
+      "tokensPerRequest": 464000,
+      "model": "claude-opus-5-5"
+    },
+    "requestMix": {
+      "design": 0.15,
+      "dev": 0.4,
+      "devSmallShare": 0.4,
+      "test": 0.2,
+      "audit": 0.1,
+      "auditMajorShare": 0.3,
+      "docs": 0.15
+    },
+    "multipliers": {
+      "design": 0.9,
+      "devML": 0.9,
+      "devS": 0.9,
+      "test": 0.8,
+      "auditRoutine": 0.9,
+      "auditMajor": 0.9,
+      "docs": 0.7,
+      "overhead": 0.05
+    },
+    "projection4000PerWeek": {
+      "currentAllOpus": {
+        "tokens": 1860000000.0,
+        "usd": 2400
+      },
+      "routingOnly": {
+        "tokens": 1670000000.0,
+        "usd": 1060
+      },
+      "fullLean": {
+        "tokens": "1.4e9-1.5e9",
+        "usd": "900-950"
+      }
+    },
+    "assumptions": {
+      "cacheReadShare": 0.85,
+      "outputShare": 0.02
+    },
+    "pilot": {
+      "requests": 100,
+      "measure": [
+        "tokens per request",
+        "type",
+        "model",
+        "session",
+        "escalations"
+      ]
+    }
   }
 }

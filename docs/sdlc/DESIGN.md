@@ -2,6 +2,7 @@
 
 **Status:** Draft v1 · **Runtime:** Claude Code cloud sessions · **Shared state:** GitHub
 **Human gates:** you approve every plan, every merge and every release
+**Mode:** lean. Each request goes to one session (§2A). The full pipeline is only for features that need a spec (§5).
 
 This document describes a software development lifecycle (SDLC) in which a small team
 of Claude Code cloud sessions works together like a dev team. Each session has its own
@@ -14,7 +15,7 @@ session bus. GitHub stays the single source of truth for every artifact.
 
 | Goal | How it is met |
 |---|---|
-| **Token efficiency** | Messages carry *pointers* (issue #, PR #, SHA, file path), never pasted content. The mod handles acks and heartbeats without waking the model. Each role gets the cheapest model that does the job well. Short-lived worker sessions keep contexts small. |
+| **Token efficiency** | Each request goes to one session, not the whole team (§2A). Measured baseline: 464k tokens per request on all-Opus; target ≤ 0.9× (§5.4). Messages carry *pointers* (issue #, PR #, SHA, file path), never pasted content. The mod handles acks and heartbeats without waking the model. Each role gets the cheapest model that does the job well. Short-lived worker sessions keep contexts small. |
 | **Quality** | Opus plans and makes the architecture calls. Every PR gets a separate test-and-review pass. Escalation path: Haiku → Sonnet → Opus. |
 | **Human control** | Three hard gates (plan approval, merge and release). Agents can never merge or push to `main`; the mod blocks those calls. |
 | **Traceability** | Every task is a GitHub issue, every plan is a spec PR, every change is a PR, every decision is an ADR. Bus messages always cite those IDs. |
@@ -90,6 +91,51 @@ Haiku (Ops / Dev-Utility) ──can't fix in 1 attempt──▶ Sonnet (Dev-Core
 
 ---
 
+## 2A. Request routing: one request, one session (lean mode)
+
+Most requests are a single piece of work: a design, a coding task, a test, an audit or a
+doc. **Each request goes to the one session that owns that type of work.** It is not sent
+through the whole team. The full pipeline in §5 is used only for features that need a
+spec (medium and large features).
+
+### Routing table
+
+The DevBus mod routes each request with fixed rules from its `type:*` and `size:*` labels
+and the folders it touches. No model turn is spent on routing, and the Lead is not involved
+unless the request is design work.
+
+| Request type | Label | Goes to | Model |
+|---|---|---|---|
+| Design / architecture / spec | `type:design` | Lead | Opus 5.5 |
+| Development, medium or large | `type:dev` + `size:M`/`size:L` | Dev-Core or Dev-Edge (by folders) | Sonnet 5.5 |
+| Development, small | `type:dev` + `size:S` | Dev-Utility (batched) | Haiku 5.5 |
+| Testing | `type:test` | QA | Sonnet 5.5 |
+| Audit, routine | `type:audit` | QA | Sonnet 5.5 |
+| Audit, major (large + major infra or major feature) | `type:audit` + `review:opus` | Lead | Opus 5.5 |
+| Documentation | `type:docs` | Ops | Haiku 5.5 |
+
+A request with no `type:*` label goes to the Lead once for labelling only, with a capped
+turn (≤ 10k tokens). The Lead labels it and DevBus routes it.
+
+### Lean-mode rules (enforced by the mod or the role prompts)
+
+| # | Rule | Effect on tokens |
+|---|---|---|
+| 1 | **The mod routes requests**, not the Lead (table above). | Opus is not used on non-design requests |
+| 2 | **Small dev requests stay in one session.** Dev-Utility does the work end to end. Review is a Haiku diff check plus CI. No QA session, no Lead. | Small tasks cost about the same tokens as today, at Haiku prices |
+| 3 | **Batching.** Dev-Utility takes up to 10 related `size:S` requests in the same area in one session, so it learns the codebase once. | ~20–40% fewer tokens on small tasks |
+| 4 | **QA works from the diff and test plan**, with a cap of ~30k context per review. It explores the wider codebase only through Haiku subagents. | QA overhead ~10–15% of a dev task |
+| 5 | **Ops is mostly scripts.** The changelog is generated from PR titles and CI checks are plain scripts. Haiku runs only on a CI failure or a real docs edit. | Near-zero Ops tokens on most tasks |
+| 6 | **Token budget per request**, enforced by the mod (`session.measure`): `size:S` 300k, `size:M` 550k, `size:L` 1.4M, design 500k. At 80% the session gets a warning. At 100% it stops and sends `BUDGET`/`ESCALATE` instead of looping. | Caps runaway sessions |
+| 7 | **Small contexts.** Sessions compact at ~60k tokens. Each lane keeps a short repo map (`docs/sdlc/repo-map/<lane>.md`) so it doesn't have to explore. | Each turn re-reads less |
+| 8 | **Fresh session per request type change.** A session never carries one request's context into an unrelated one, except batched `size:S` work. | Avoids long, expensive contexts |
+
+**Trade-off:** small dev requests have no separate QA session. CI, the Haiku diff
+check and your merge approval still apply. Keeping QA on every request adds about 0.1–0.15×
+of a request's tokens for each small task.
+
+---
+
 ## 3. Architecture
 
 ```mermaid
@@ -160,7 +206,8 @@ It does not replace the native bus. It wraps it, adding structure and enforcemen
 | `session.send` | Rejects free-form or oversized messages: no valid envelope, or `summary` over 600 chars, gives `isDelivered:false`. This forces pointers instead of pasted code. Also scrubs anything that looks like a secret. |
 | `session.receive` | Parses incoming envelopes and updates the Team Board state. **Consumes** (`{ consumed }`) `HEARTBEAT`, duplicate (same `id`) and pure `ACK` messages, so they never cost a model turn. Messages that need work are rewritten to a short normalized form before the model reads them. |
 | `tool.call` guards | Blocks `merge_pull_request`, `enable_pr_auto_merge`, any push to `main`/`master`, and `--force` pushes for **every** role. Blocks `git tag` and release creation unless the target is the merge commit of a merged `release/*` PR. Per role: Ops may only write under `docs/`, `CHANGELOG.md`, `.github/` and lint fixes. QA may not edit `src/` except test files. Only the Lead may call `create_session` / `archive_session`. |
-| `session.measure` | Watches context and rate-limit usage. Past 70% context it shows a toast suggesting `/compact`. Past the per-session budget it sends `BUDGET` to the Lead. |
+| `session.measure` | Tracks tokens per request against the per-request budget (§2A rule 6): warns at 80%, stops the session and sends `BUDGET` at 100%. Suggests `/compact` at ~60k context. Logs tokens per request, type, model and session for the pilot (§5.5). |
+| Request router | Reads `type:*`, `size:*` and changed folders on new issues and sends `TASK` straight to the owning session (§2A). It's deterministic, with no model turn, and batches `size:S` dev requests for Dev-Utility. |
 | `ui` | **Team Board pane**: roster, each session's current task, status, last heartbeat, and pending approvals. **Status line**: `role · #issue · state`. **Toast** on `BLOCKED` or `APPROVAL_REQUEST`. |
 | Commands | `/bus` (board), `/handoff <role> <#ref>`, `/blocked <reason>`, `/roster`, `/approve <#pr>` (Lead only, which relays your approval). |
 
@@ -201,7 +248,7 @@ One line of header, then at most 600 chars of summary. Pointers only.
 
 ---
 
-## 5. Lifecycle: one feature, end to end
+## 5. Lifecycle: one feature, end to end (medium and large features with a spec)
 
 ```mermaid
 sequenceDiagram
@@ -278,18 +325,56 @@ sequenceDiagram
 7. **Lead reads diffs sparingly.** It reviews specs and `review:opus` PRs only. QA covers the rest.
 8. **CI logs.** Ops passes job name + failing test + log line range, never full logs.
 
-### 5.4 Expected token split (rough guide)
+### 5.4 Cost model (calibrated to measured usage)
 
-| Session | Share of tokens | Share of cost |
+> **Status: estimate.** Calibrated against the measured baseline below. The per-type
+> multipliers are estimates until the pilot (§5.5) measures them.
+
+**Baseline (measured):** 2,500 requests in 7 days used 1.16B tokens, all on Opus. That's
+**464k tokens per request**. Each request was one task: design, development, testing,
+auditing or documentation.
+
+**Assumptions:**
+- **Request mix:** design 15%, development 40% (40% of those `size:S`), testing 20%, audit 10% (30% of those major), docs 15%.
+- **Overhead:** +5% for DevBus hand-offs and escalations from cheaper models.
+- **Cost inputs:** 85% of input read from the prompt cache, ~2% of tokens are output.
+- **Prices** (per 1M tokens, input / output / cached input): Opus 5.5 $4 / $20 / $0.20; Sonnet 5.5 $2 / $10 / $0.20; Haiku 5.5 $0.10 / $0.50 / ~$0.01 (assumed).
+
+| Request type | Session / model | Tokens vs. baseline |
 |---|---|---|
-| Dev-Core + Dev-Edge, Sonnet | ~45% | ~40% |
-| Dev-Utility, Haiku | ~10% | ~3% |
-| QA, Sonnet | ~20% | ~17% |
-| Lead, Opus | ~10% | ~30% |
-| Ops, Haiku | ~15% | ~10% |
+| Design | Lead / Opus | ~0.9× |
+| Development, M/L | Dev-Core, Dev-Edge / Sonnet | ~0.9× |
+| Development, S | Dev-Utility / Haiku | ~0.9× (~0.6–0.7× with batching) |
+| Testing | QA / Sonnet | ~0.8× |
+| Audit, routine | QA / Sonnet | ~0.9× |
+| Audit, major | Lead / Opus | ~0.9× |
+| Docs | Ops / Haiku | ~0.7× |
+| Hand-offs + escalations | mixed | +5% |
 
-Compared with running every role on Opus, this should cut cost substantially, while
-the work that most affects quality (design and hard reviews) stays on Opus.
+**Weekly projection at 4,000 requests:**
+
+| | Current (all Opus) | This model (routing only) | This model + full lean mode |
+|---|---|---|---|
+| Tokens per week | 1.86B | **~1.67B (−10%)** | ~1.4–1.5B (−20–25%) |
+| Opus share of tokens | 100% | ~18% | ~20% |
+| Sonnet share | 0% | ~51% | ~50% |
+| Haiku share | 0% | ~28% | ~27% |
+| Est. cost per week | ~$2,400 | **~$1,060 (−55%)** | ~$900–950 (−60%) |
+
+Most of the cost saving comes from model routing: 82% of tokens move off Opus. Most of the
+token saving comes from lean mode: batching, budgets and small contexts. The
+"full lean mode" column is not measured yet.
+
+**Scaling rule of thumb:** weekly tokens ≈ requests × 464k × 0.90 (routing only), or × ~0.78 (full lean mode).
+
+### 5.5 Pilot to replace estimates with measurements
+
+1. Run ~100 requests in the usual mix (15/40/20/10/15) through the new setup.
+2. DevBus logs tokens per request, request type, model and session (`session.measure`).
+3. Compare each type against the 464k baseline, then update the multipliers in §5.4 and
+   the budgets in `sdlc.config.json`.
+4. Check quality too: any request type where the cheaper model needs frequent escalation
+   moves up a model tier.
 
 ---
 
@@ -297,7 +382,7 @@ the work that most affects quality (design and hard reviews) stays on Opus.
 
 | Item | Convention |
 |---|---|
-| Labels | `lane:core` `lane:edge` `lane:utility` · `size:S` `size:M` `size:L` · `role:qa` `role:ops` · `state:planned` `state:in-progress` `state:review` `state:blocked` · `review:opus` `feature:major` `infra:major` · `release` · `needs-approval` |
+| Labels | `lane:core` `lane:edge` `lane:utility` · `size:S` `size:M` `size:L` · `type:design` `type:dev` `type:test` `type:audit` `type:docs` · `role:qa` `role:ops` · `state:planned` `state:in-progress` `state:review` `state:blocked` · `review:opus` `feature:major` `infra:major` · `release` · `needs-approval` |
 | Branches | `spec/<n>-<slug>` (Lead), `feat/<n>-<slug>` / `fix/<n>-<slug>` (Dev) |
 | PR body | `Closes #n`, spec link, test plan, size and any `review:opus` / `infra:major` / `feature:major` labels |
 | Branch protection on `main` | 1 human approval, required CI checks, no force push |
@@ -347,6 +432,7 @@ the work that most affects quality (design and hard reviews) stays on Opus.
 Files in this design:
 
 - `docs/sdlc/DESIGN.md`: this document
-- `docs/sdlc/sdlc.config.json`: roles, models, budgets, guardrails (machine-readable)
+- `docs/sdlc/sdlc.config.json`: roles, models, routing, budgets, guardrails (machine-readable)
+- `docs/sdlc/repo-map/<lane>.md`: short per-lane repo maps (to create per project)
 - `docs/sdlc/roles/lead.md`, `dev-core.md`, `dev-edge.md`, `dev-utility.md`, `qa.md`, `ops.md`: role prompts
 - `docs/sdlc/protocol.md`: DevBus envelope quick reference for agents

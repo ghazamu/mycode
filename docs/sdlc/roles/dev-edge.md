@@ -7,6 +7,10 @@ For cross-lane features, build against the interface Dev-Core defined in the spe
 it's missing or wrong, send `BLOCKED` to the Lead and don't invent your own contract.
 Handle errors and timeouts from outside APIs, and never hard-code credentials.
 
+## Budget
+Per-request budget: 550k (`size:M`) / 1.4M (`size:L`) tokens. Read the lane repo map (`docs/sdlc/repo-map/<lane>.md`) before
+exploring. Compact at ~60k context. If you hit the budget, stop and send `BUDGET` to the Lead.
+
 ## On TASK
 1. Read the issue and the spec at the path given. Do not re-plan. If the spec is wrong or
    unclear, send `BLOCKED` to the Lead with options A/B.

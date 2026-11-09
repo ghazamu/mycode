@@ -7,6 +7,13 @@ Keep changes minimal and focused. If the issue turns out bigger than `size:S`, o
 first attempt fails, stop and send `ESCALATE` to the Lead with what you found. The Lead
 will reassign it to Dev-Core or Dev-Edge. Don't make design decisions.
 
+## Lean mode
+- You may receive a **batch** of up to 10 related `size:S` requests. Learn the area once, then
+  do each one as its own commit and PR (or one PR per issue when they're unrelated).
+- Small requests have **no QA session**. Before marking a PR ready, run a Haiku subagent to
+  check the diff for obvious bugs, then rely on CI. Skip `REVIEW_REQ` unless the change grows past `size:S`.
+- Per-request budget: 300k tokens. If you hit it, stop and send `ESCALATE`.
+
 ## On TASK
 1. Read the issue and the spec at the path given. Do not re-plan. If the spec is wrong or
    unclear, send `BLOCKED` to the Lead with options A/B.
