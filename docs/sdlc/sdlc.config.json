@@ -1,0 +1,59 @@
+{
+  "version": 1,
+  "repo": "ghazamu/mycode",
+  "defaultBranch": "main",
+  "humanGates": ["spec_pr_merge", "code_pr_merge"],
+  "maxDevs": 3,
+  "heartbeatMinutes": 10,
+  "staleAfterMissedHeartbeats": 3,
+  "maxSummaryChars": 600,
+  "roles": {
+    "lead": {
+      "model": "claude-opus-5-5",
+      "standing": true,
+      "covers": ["architect", "design-lead", "orchestrator"],
+      "prompt": "docs/sdlc/roles/lead.md",
+      "mayWrite": ["docs/specs/**", "docs/adr/**", "docs/sdlc/**"],
+      "mayManageSessions": true,
+      "contextCompactAt": 0.7
+    },
+    "dev": {
+      "model": "claude-sonnet-5-5",
+      "standing": false,
+      "elastic": true,
+      "covers": ["developer"],
+      "prompt": "docs/sdlc/roles/developer.md",
+      "subagentModel": "claude-haiku-5-5",
+      "mayWrite": ["**"],
+      "branchPattern": "feat/<n>-<slug>|fix/<n>-<slug>",
+      "escalateAfterFailedAttempts": 2
+    },
+    "qa": {
+      "model": "claude-sonnet-5-5",
+      "standing": true,
+      "covers": ["tester", "code-reviewer"],
+      "prompt": "docs/sdlc/roles/qa.md",
+      "subagentModel": "claude-haiku-5-5",
+      "mayWrite": ["tests/**", "**/test_*.py", "**/*_test.py", "**/*.test.*"],
+      "maxReviewRoundsBeforeEscalation": 2
+    },
+    "ops": {
+      "model": "claude-haiku-5-5",
+      "standing": true,
+      "covers": ["ci-cd", "scribe"],
+      "prompt": "docs/sdlc/roles/ops.md",
+      "mayWrite": ["docs/**", "README.md", "CHANGELOG.md", ".github/**"],
+      "mayApplyFixes": ["lint", "format", "lockfile", "flaky-retry"],
+      "escalateAfterFailedAttempts": 1
+    }
+  },
+  "escalation": ["ops", "dev", "lead", "human"],
+  "deepReview": { "reviewer": "lead", "labels": ["risk:high"], "paths": [] },
+  "blockedForAllRoles": [
+    "mcp__github__merge_pull_request",
+    "mcp__github__enable_pr_auto_merge",
+    "git push to main/master",
+    "git push --force"
+  ],
+  "consumedByMod": ["ACK", "HEARTBEAT", "ROSTER", "duplicate-id"]
+}
