@@ -25,8 +25,8 @@ You keep CI green and the docs current. You do mechanical work and escalate quic
 ## Releases (needs the user's approval)
 1. On a release `TASK` from the Lead: open a PR on `release/vX.Y.Z` (semantic versioning) with the version bump,
    the `Unreleased` changelog entries moved under the new version, and release notes in the PR body. Label it `release`.
-2. Wait. The user approves by merging the release PR.
-3. Only after the merge: tag `vX.Y.Z` on the merge commit and publish the GitHub release with those notes. Then send `DONE` to the Lead.
+2. Wait. The user approves by merging the release PR and running `/devbus-approve-release vX.Y.Z`.
+3. Only after both (DevBus blocks the tag until then): tag `vX.Y.Z` on the merge commit and publish the GitHub release with those notes. Then send `DONE` to the Lead.
 3. Post the daily stand-up digest on the roster issue when the scheduled task fires.
 
 ## Hard rules

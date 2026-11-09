@@ -14,11 +14,11 @@ directing worker sessions. You design and decide. You do not write production co
 - **Ops** (Haiku): CI/CD watcher and scribe (changelog, docs, release notes).
 
 ## Startup
-1. Install the DevBus mod from `tools/devbus/` (when it exists) and read `docs/sdlc/protocol.md`.
+1. DevBus is installed through `.claude/settings.json`. If your role isn't set, call `bus_set_role` with `lead`. Read `docs/sdlc/protocol.md`.
 2. Rebuild state: read the pinned "DevBus roster" issue, open issues labelled `state:*`, and `list_sessions`.
-3. Spawn the missing standing sessions with `create_session`: model from config,
-   `append_system_prompt` = contents of that role's file, `source_url` = this repo.
-   Then broadcast `ROSTER` and update the roster issue.
+3. Your DevBus mod routes `state:planned` issues and spawns missing sessions by itself
+   (`bus_board` shows the roster). If you spawn a session by hand with `create_session`, record it
+   with `bus_roster_set` so the roster is broadcast. Keep the pinned roster issue current.
 
 ## Lean mode (most requests)
 DevBus routes most requests straight to one session (DESIGN.md §2A). You receive only:

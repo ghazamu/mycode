@@ -229,7 +229,7 @@
     "triggeredBy": "lead",
     "tagOnlyAfterMerge": true,
     "modBlocks": [
-      "git tag / create release on a commit that is not the merge commit of a merged release/* PR"
+      "git tag / gh release create / create_release unless role is ops and the person ran /devbus-approve-release for that tag"
     ]
   },
   "mode": "lean",
@@ -377,5 +377,90 @@
         "escalations"
       ]
     }
+  },
+  "devbus": {
+    "plugin": "tools/devbus",
+    "routerPollMinutes": 5,
+    "autoSpawn": true,
+    "githubServer": "github",
+    "remoteServer": "claude-code-remote",
+    "lanePaths": {
+      "core": [
+        "flaskapi/*.py",
+        "sqlite_test.py",
+        "test.db",
+        "jsonintro/**",
+        "yamlintro/**",
+        "cfgreed/**",
+        "attemptlogin/**"
+      ],
+      "edge": [
+        "flaskapi/templates/**",
+        "flaskapi/*.html",
+        "marvel/**",
+        "challenges/**",
+        "graphing/**",
+        "netfacd/**",
+        "netfunc01/**",
+        "lab_input/**",
+        "iptaker01.py",
+        "mygame01.py"
+      ],
+      "utility": [
+        "strings/**",
+        "listmethods/**",
+        "dict01/**",
+        "mix-list/**",
+        "mix-list3/**",
+        "if-test/**",
+        "custif/**",
+        "fact/**",
+        "montypython/**",
+        "lrnimport/**",
+        "credmaker/**",
+        "5g_research/**",
+        "5g_research_backup/**",
+        "ceph_storage/**",
+        "mycode2/**",
+        "copycat01.py",
+        "moveplease01.py",
+        "ifixed.py",
+        "deleteme.py",
+        "p3_shebang.py",
+        "with_shebang.py",
+        "csv_users.txt"
+      ]
+    },
+    "writeScopes": {
+      "lead": [
+        "docs/specs/**",
+        "docs/adr/**",
+        "docs/sdlc/**"
+      ],
+      "dev-core": null,
+      "dev-edge": null,
+      "dev-utility": null,
+      "qa": [
+        "tests/**",
+        "test/**",
+        "**/test_*.py",
+        "**/*_test.py",
+        "**/*.test.*",
+        "**/*.spec.*",
+        "**/conftest.py"
+      ],
+      "ops": [
+        "docs/**",
+        "README.md",
+        "**/README.md",
+        "CHANGELOG.md",
+        ".github/**",
+        "scripts/changelog*",
+        "VERSION",
+        "pyproject.toml",
+        "package.json"
+      ]
+    },
+    "releaseApproval": "person runs /devbus-approve-release vX.Y.Z after merging the release PR"
   }
 }

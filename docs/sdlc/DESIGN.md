@@ -196,30 +196,41 @@ flowchart LR
 DevBus is a Claude Code **mod** (hooks module plus manifest) installed in every session.
 It does not replace the native bus. It wraps it, adding structure and enforcement.
 
-### 4.1 What it hooks
+### 4.1 What it hooks (as built: `tools/devbus/`)
+
+**Status: built.** `claude plugin validate` passes and 29 tests pass (`claude plugin test tools/devbus`).
+It has not run in live sessions yet; the pilot (§5.5) is its first real run. Code:
+`hooks/lib/envelope.ts` (format), `hooks/lib/policy.ts` (routing, budgets, guards: pure
+functions), `hooks/register.tsx` (hooks, tools, commands, pane).
 
 | Hook / API | Behaviour |
 |---|---|
-| `session.start` | Reads its role from the `DEVBUS_ROLE` env var, or from the first `ROSTER` message. Registers the bus tools and slash commands, opens the Team Board pane and starts a heartbeat timer (`$.clock.every`). |
-| `$.tool.register` → `mcp__devbus__bus_send` | The only way the model sends a bus message. Takes structured fields (`to`, `type`, `refs`, `summary`), builds the envelope and calls `$.session.send({ to: { sessionId } })` after resolving role → sessionId from the roster. Registered with `isDeferred: false` so the model always sees it. |
-| `mcp__devbus__bus_roster`, `bus_board` | Read-only views of the roster and open tasks, so the model never has to "ask around". |
-| `session.send` | Rejects free-form or oversized messages: no valid envelope, or `summary` over 600 chars, gives `isDelivered:false`. This forces pointers instead of pasted code. Also scrubs anything that looks like a secret. |
-| `session.receive` | Parses incoming envelopes and updates the Team Board state. **Consumes** (`{ consumed }`) `HEARTBEAT`, duplicate (same `id`) and pure `ACK` messages, so they never cost a model turn. Messages that need work are rewritten to a short normalized form before the model reads them. |
-| `tool.call` guards | Blocks `merge_pull_request`, `enable_pr_auto_merge`, any push to `main`/`master`, and `--force` pushes for **every** role. Blocks `git tag` and release creation unless the target is the merge commit of a merged `release/*` PR. Per role: Ops may only write under `docs/`, `CHANGELOG.md`, `.github/` and lint fixes. QA may not edit `src/` except test files. Only the Lead may call `create_session` / `archive_session`. |
-| `session.measure` | Tracks tokens per request against the per-request budget (§2A rule 6): warns at 80%, stops the session and sends `BUDGET` at 100%. Suggests `/compact` at ~60k context. Logs tokens per request, type, model and session for the pilot (§5.5). |
-| Request router | Reads `type:*`, `size:*` and changed folders on new issues and sends `TASK` straight to the owning session (§2A). It's deterministic, with no model turn, and batches `size:S` dev requests for Dev-Utility. |
-| `ui` | **Team Board pane**: roster, each session's current task, status, last heartbeat, and pending approvals. **Status line**: `role · #issue · state`. **Toast** on `BLOCKED` or `APPROVAL_REQUEST`. |
-| Commands | `/bus` (board), `/handoff <role> <#ref>`, `/blocked <reason>`, `/roster`, `/approve <#pr>` (Lead only, which relays your approval). |
+| `session.start` | Loads `docs/sdlc/sdlc.config.json` (the `devbus` section plus budgets, models, prompts) and reads the role from state or `DEVBUS_ROLE`. Registers the model tools and commands, starts the heartbeat timer and (Lead only) the router timer, opens the board pane. |
+| Model tools | `bus_send` (the only way to message: builds, validates and scrubs the envelope, resolves role → session from the roster; `isDeferred: false`), `bus_board`, `bus_set_role` (once), `bus_roster_set` (Lead), `bus_route` (Lead). |
+| Delivery | `$.session.send({ to: { sessionId } })` on the native bus. If that's refused, it falls back to the remote-session server's `send_message`. |
+| `session.send` | Refuses the model's raw SendMessage when it has no envelope ("use bus_send"). Scrubs secret-like values from every outgoing message. |
+| `session.receive` | Parses envelopes and drops duplicate ids. **Consumes** `ACK`, `HEARTBEAT`, `ROSTER` and `STATUS`, so no model turn is spent on them. Auto-ACKs a `TASK` and starts its token count. Shortens everything else before the model reads it. The Lead's copy records `tokens=` from `DONE` messages for team-wide usage. |
+| `turn.step` | Adds every response's usage (uncached + cache write + cache read + output) to the current request. At 80% of its budget it shows a toast. At 100% it sends `BUDGET` to the Lead and blocks further tool calls except the bus. |
+| `tool.call` guards | For every role: blocks merge and auto-merge, `gh pr merge`, force-push and push to `main`/`master`. Tags and releases (`git tag`, `gh release create`, GitHub release tools) are allowed only for Ops and only after the person runs `/devbus-approve-release <tag>`. Session management is Lead-only. Per-role write scopes (Lead: specs, ADRs, sdlc docs; QA: test files; Ops: docs, changelog, `.github`, version files). Dev lanes get a warning (not a denial) for edits outside `devbus.lanePaths`. |
+| Router (Lead) | Every `routerPollMinutes`, it lists open `state:planned` issues through the GitHub MCP server and routes them by label (§2A), batching `size:S` per `area:*` or lane. It spawns missing sessions with `create_session` on the configured model and role prompt when `autoSpawn` is on, sends `TASK` with `kind` and `budget`, and relabels issues `state:in-progress` + `routed:<role>`. Design and labelling tasks for the Lead itself arrive as a prompt. No model turn is spent on routing. |
+| UI | **Board pane**: role, current task with tokens/budget, roster with last-seen and STALE flags, message feed. **Status line**: `devbus · role · #task · tokens/budget`. **Toasts** on `APPROVAL_REQ`, `BLOCKED`, `BUDGET` and lane warnings. |
+| Commands | `/devbus`, `/devbus-role <role>`, `/devbus-roster <role> <session_id>`, `/devbus-approve-release vX.Y.Z` (accepted only from the person's own input, not the model), `/devbus-usage` (avg tokens per request kind vs. the 464k baseline), `/devbus-route`. |
 
 **Roster distribution.** `$.store` is per container, so it is **not** shared across
-cloud sessions. The Lead owns the roster (`role → sessionId`). It broadcasts a `ROSTER`
-envelope to every session on spawn and on every change, and each session keeps it in
-`$.state`. A copy is also kept in a pinned GitHub issue, "DevBus roster", so a recreated
-Lead can recover it.
+cloud sessions. The Lead owns the roster (`role → sessionId`). It records entries with
+`bus_roster_set` or automatically on spawn, and sends each session a `ROSTER` addressed to
+that session's role. A session with no role adopts it from that message. A copy is
+also kept in a pinned GitHub issue, "DevBus roster", which the Lead model maintains, so a
+recreated Lead can recover it.
 
-**Distribution of the mod.** The mod lives in this repo under `tools/devbus/`, with a
-`.claude-plugin/marketplace.json`, so every cloud session that clones the repo can
-install it. The Lead's spawn prompt tells each worker to install it as its first step.
+**Distribution of the mod.** The repo root holds `.claude-plugin/marketplace.json`
+(marketplace `mycode-devbus`, plugin source `./tools/devbus`), and `.claude/settings.json`
+enables `devbus@mycode-devbus` for every session that clones the repo. The marketplace is
+read from the default branch, so automatic install starts once the mod is on `main`.
+Manual install: `/plugin install devbus --marketplace ghazamu/mycode`.
+
+**Lane repo maps.** `docs/sdlc/repo-map/{core,edge,utility}.md` are short per-lane maps.
+Their folder globs are the same as `devbus.lanePaths` in the config.
 
 ### 4.2 Envelope format (DevBus v1)
 
@@ -309,9 +320,9 @@ sequenceDiagram
   it) revises.
 - **Merge approval = you clicking Merge** on the code PR. Agents are blocked from
   merging by the mod and by branch protection.
-- **Release approval = merging the release PR.** Ops tags and publishes only after you
-  merge it. The DevBus mod blocks tagging and release creation on any commit that is not
-  the merge commit of an approved `release/*` PR.
+- **Release approval = merging the release PR, then `/devbus-approve-release vX.Y.Z`.** Ops tags
+  and publishes only after both. The DevBus mod blocks tagging and release creation for a tag
+  you haven't approved, and accepts that command only from your own input, not from a model.
 - You can always talk to the Lead directly in the Claude app ("pause Dev-Edge", "re-plan #14").
 
 ### 5.3 Token-saving rules (enforced by the mod or role prompts)
@@ -382,7 +393,7 @@ token saving comes from lean mode: batching, budgets and small contexts. The
 
 | Item | Convention |
 |---|---|
-| Labels | `lane:core` `lane:edge` `lane:utility` · `size:S` `size:M` `size:L` · `type:design` `type:dev` `type:test` `type:audit` `type:docs` · `role:qa` `role:ops` · `state:planned` `state:in-progress` `state:review` `state:blocked` · `review:opus` `feature:major` `infra:major` · `release` · `needs-approval` |
+| Labels | `area:<name>` (batching key for `size:S`) · `routed:<role>` (set by the router) · `lane:core` `lane:edge` `lane:utility` · `size:S` `size:M` `size:L` · `type:design` `type:dev` `type:test` `type:audit` `type:docs` · `role:qa` `role:ops` · `state:planned` `state:in-progress` `state:review` `state:blocked` · `review:opus` `feature:major` `infra:major` · `release` · `needs-approval` |
 | Branches | `spec/<n>-<slug>` (Lead), `feat/<n>-<slug>` / `fix/<n>-<slug>` (Dev) |
 | PR body | `Closes #n`, spec link, test plan, size and any `review:opus` / `infra:major` / `feature:major` labels |
 | Branch protection on `main` | 1 human approval, required CI checks, no force push |
@@ -393,16 +404,21 @@ token saving comes from lean mode: batching, budgets and small contexts. The
 
 ## 7. Bootstrapping
 
-1. Add branch protection on `main` (one human approval + CI).
-2. Start the **Lead** session in the Claude app on this repo with model **Opus 5.5**,
-   and paste `docs/sdlc/roles/lead.md` as the first message (or set it as the session's
-   appended system prompt).
-3. The Lead reads `docs/sdlc/sdlc.config.json` and spawns QA and Ops (and each dev lane when it
-   first gets an approved task) with `create_session`, passing each worker's model and its role file
-   as `append_system_prompt`, then broadcasts `ROSTER`.
-4. The Lead subscribes Ops to open PRs (`subscribe_pr_activity`) as PRs are created.
-5. A daily scheduled task wakes the Lead to post a stand-up digest on the roster issue
+1. Merge the DevBus mod to `main` (so `.claude/settings.json` can install it) and add branch
+   protection on `main` (one human approval + CI).
+2. Create the labels in §6 (`type:*`, `size:*`, `lane:*`, `area:*`, `state:*`, `routed:*`,
+   `review:opus`, `feature:major`, `infra:major`, `release`).
+3. Start the **Lead** session in the Claude app on this repo with model **Opus 5.5**, paste
+   `docs/sdlc/roles/lead.md` as the first message, and type `/devbus-role lead`.
+4. File work as issues labelled `state:planned` plus `type:*` and `size:*` (and `lane:*` for medium and large dev
+   work). The Lead's router picks them up within `routerPollMinutes`, or immediately with
+   `/devbus-route`. It spawns QA, Ops and dev lanes on first use (`autoSpawn`), each on its
+   configured model, and broadcasts the roster.
+5. The Lead subscribes Ops to open PRs (`subscribe_pr_activity`) as PRs are created.
+6. A daily scheduled task wakes the Lead to post a stand-up digest on the roster issue
    and to sweep stale `state:in-progress` issues.
+7. Pilot (§5.5): after ~100 requests, run `/devbus-usage` in the Lead session and update
+   the multipliers and budgets.
 
 ---
 
@@ -424,8 +440,7 @@ token saving comes from lean mode: batching, budgets and small contexts. The
 2. **Release gate.** Decided: every release needs your approval (merge of the release PR).
 3. **Opus deep-review scope.** Decided: large PRs that are major infrastructure changes or
    major features (see §2).
-4. **Build the DevBus mod next?** This document is the design. Next steps would be building
-   `tools/devbus/` (mod + tests) and a sample feature run on `flaskapi/`.
+4. **DevBus mod.** Built (`tools/devbus/`). Next: merge to `main`, then run the pilot (§5.5).
 
 ---
 
@@ -433,6 +448,7 @@ Files in this design:
 
 - `docs/sdlc/DESIGN.md`: this document
 - `docs/sdlc/sdlc.config.json`: roles, models, routing, budgets, guardrails (machine-readable)
-- `docs/sdlc/repo-map/<lane>.md`: short per-lane repo maps (to create per project)
+- `docs/sdlc/repo-map/{core,edge,utility}.md`: short per-lane repo maps for this repo
+- `tools/devbus/`: the DevBus mod (README, hooks, tests); `.claude-plugin/marketplace.json` and `.claude/settings.json` install it
 - `docs/sdlc/roles/lead.md`, `dev-core.md`, `dev-edge.md`, `dev-utility.md`, `qa.md`, `ops.md`: role prompts
 - `docs/sdlc/protocol.md`: DevBus envelope quick reference for agents

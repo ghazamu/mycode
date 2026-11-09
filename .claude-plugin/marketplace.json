@@ -1,0 +1,5 @@
+{
+  "name": "mycode-devbus",
+  "owner": { "name": "Muhammad Ghazanfar" },
+  "plugins": [{ "name": "devbus", "source": "./tools/devbus" }]
+}

@@ -1,0 +1,9 @@
+{
+  "name": "devbus",
+  "version": "0.1.0",
+  "description": "Structured, token-lean messaging, routing, guardrails and budgets for a multi-session Claude dev team.",
+  "types": "./types/index.d.ts",
+  "author": {
+    "name": "Muhammad Ghazanfar"
+  }
+}

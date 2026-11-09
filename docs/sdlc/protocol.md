@@ -1,6 +1,7 @@
 # DevBus/1 — quick reference for agents
 
-Send every bus message with the `bus_send` tool (DevBus mod). Never paste code, diffs or
+Send every bus message with the `bus_send` tool (DevBus mod). `bus_board` shows your role, task budget and the roster.
+The raw SendMessage tool is refused unless the text is an envelope. Never paste code, diffs or
 logs into a message. Cite `#issue`, `#pr`, SHAs and `path:line` instead.
 
 ```
@@ -12,6 +13,7 @@ logs into a message. Cite `#issue`, `#pr`, SHAs and `path:line` instead.
 |---|---|
 | `TASK` | Lead assigns an issue. Includes spec path and branch name |
 | `ACK` | Automatic (mod). Don't send it by hand |
+| `ROSTER`, `HEARTBEAT` | Automatic (mod) |
 | `STATUS` | Milestones only: PR opened, ready for review, done |
 | `BLOCKED` | You need a decision. Give options **A / B** and your recommendation |
 | `REVIEW_REQ` | Dev → QA: PR is ready (CI green, self-reviewed) |

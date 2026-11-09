@@ -1,0 +1,10 @@
+{
+  "extraKnownMarketplaces": {
+    "mycode-devbus": {
+      "source": { "source": "github", "repo": "ghazamu/mycode" }
+    }
+  },
+  "enabledPlugins": {
+    "devbus@mycode-devbus": true
+  }
+}
