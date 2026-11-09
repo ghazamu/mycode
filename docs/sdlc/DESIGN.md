@@ -22,16 +22,16 @@ session bus. GitHub stays the single source of truth for every artifact.
 
 ---
 
-## 2. Team topology: 4 standing sessions (+ elastic devs)
+## 2. Team topology: 3 standing sessions + 3 lane-based dev sessions
 
 You named five responsibilities: architect, developer, tester, scribe and CI/CD. They
-are packed into **four standing sessions**, pairing roles that share context and
-cost profile:
+are packed into **three standing sessions** (Lead, QA, Ops) plus **three dev sessions,
+one per lane**, pairing roles that share context and cost profile:
 
 | # | Session | Roles | Model | Why this model |
 |---|---|---|---|---|
 | 1 | **Lead** | Architect / design lead, orchestrator, your single point of contact | **Opus 5.5** (`claude-opus-5-5`) | Few but high-impact calls: decomposition, interfaces, trade-offs, design review. Mostly reads, writes little, so Opus pricing is spent where it matters. |
-| 2 | **Dev** (×1–3) | Developer / coder | **Sonnet 5.5** (`claude-sonnet-5-5`) | The highest-volume token user. Sonnet gives near-Opus coding quality at a fraction of the cost. Uses Haiku subagents for codebase search. |
+| 2 | **Dev lanes** (Core, Edge, Utility, see §2.1) | Developer / coder | **Sonnet 5.5** (`claude-sonnet-5-5`) for Core and Edge, **Haiku 5.5** for Utility | The highest-volume token users. Sonnet gives near-Opus coding quality at a fraction of the cost, and Haiku handles the small tickets. All use Haiku subagents for codebase search. |
 | 3 | **QA** | Tester and code reviewer | **Sonnet 5.5** | Writing tests and reviewing code needs real reasoning. Uses a separate context from Dev, so its review is independent. |
 | 4 | **Ops** | CI/CD and scribe (docs, changelog, release notes) | **Haiku 5.5** (`claude-haiku-5-5`) | Mostly mechanical work: watching CI, reading logs, applying lint/format fixes, writing changelogs and README updates. Escalates anything non-trivial. |
 
@@ -40,14 +40,39 @@ same event ("a PR changed") and both are low-reasoning. Pairing **tester + revie
 gives one independent "second pair of eyes" with fresh context. A separate scribe
 session would mostly sit idle and re-read the same PRs, which wastes tokens.
 
-**Elastic devs.** When a plan has independent work streams, the Lead spawns extra `Dev-N`
-sessions, one per issue or branch, and archives each one when its PR merges. The default
-cap is 3 concurrent devs (`maxDevs` in `sdlc.config.json`).
+### 2.1 Dev lanes
+
+The three dev sessions each own a **lane**: a set of folders and a kind of work. Each
+lane is started only when it has work and closed after its PR merges, so at most one
+session runs per lane (`maxDevs: 3`).
+
+| Session | Owns | Typical work | Model |
+|---|---|---|---|
+| **Dev-Core** (backend) | API routes, business logic, data models, database migrations, auth | Flask/FastAPI endpoints, services, storage | Sonnet 5.5 |
+| **Dev-Edge** (interface and integrations) | Frontend or templates, CLI interfaces, clients for outside APIs, config files | UI pages, CLIs, third-party API calls, wiring parts together | Sonnet 5.5 |
+| **Dev-Utility** (small and mechanical) | Issues labelled `size:S` in any area, standalone scripts | Small bug fixes, dependency bumps, renames and refactors, one-off automation scripts | Haiku 5.5, hands off after 1 failed attempt |
+
+**Why lanes:**
+- **Fewer merge conflicts.** Each lane owns its own folders, so parallel devs rarely touch the same files.
+- **Lower cost.** Small tickets go to Haiku instead of Sonnet. QA still reviews every PR.
+- **Steadier context.** A lane-specific prompt stays the same on every spawn, so it is cached.
+
+**How the Lead assigns work:**
+1. `size:S` → **Dev-Utility**, whatever the area.
+2. Otherwise route by the folders the change touches: backend → **Dev-Core**; UI, CLI or integrations → **Dev-Edge**.
+3. A change that crosses lanes is split in the spec into one issue per lane, with the shared
+   interface (API contract or schema) defined first. Core builds its side first, then Edge
+   builds against it.
+4. Lane folder ownership for each project is declared in the spec, under "Lane ownership".
+   The DevBus mod warns when a dev edits outside its lane.
+
+**Hand-off from Utility.** If Dev-Utility can't finish a `size:S` issue in 1 attempt, it
+sends `ESCALATE` to the Lead. The Lead relabels the issue (`size:M`) and reassigns it to Core or Edge.
 
 ### Escalation path (model routing)
 
 ```
-Haiku (Ops) ──can't fix in 1 attempt──▶ Sonnet (Dev) ──2 failed attempts / design question──▶ Opus (Lead) ──needs product decision──▶ You
+Haiku (Ops / Dev-Utility) ──can't fix in 1 attempt──▶ Sonnet (Dev-Core / Dev-Edge) ──2 failed attempts / design question──▶ Opus (Lead) ──needs product decision──▶ You
 ```
 
 - Ops fixes lint, format, lockfile and flaky-retry issues on its own. A real test failure
@@ -67,8 +92,9 @@ flowchart LR
 
     subgraph Cloud["Claude Code cloud sessions"]
         L["Lead<br/>Opus 5.5<br/>architect + orchestrator"]
-        D1["Dev-1<br/>Sonnet 5.5"]
-        D2["Dev-N<br/>Sonnet 5.5<br/>(elastic)"]
+        D1["Dev-Core<br/>Sonnet 5.5<br/>backend"]
+        D2["Dev-Edge<br/>Sonnet 5.5<br/>UI / CLI / integrations"]
+        D3["Dev-Utility<br/>Haiku 5.5<br/>size:S + scripts"]
         Q["QA<br/>Sonnet 5.5<br/>tests + review"]
         O["Ops<br/>Haiku 5.5<br/>CI/CD + scribe"]
     end
@@ -90,10 +116,11 @@ flowchart LR
     L <--> B
     D1 <--> B
     D2 <--> B
+    D3 <--> B
     Q <--> B
     O <--> B
     L --> I & S
-    D1 & D2 --> P
+    D1 & D2 & D3 --> P
     Q -->|reviews, test commits| P
     CI -->|PR events| O
     O --> DOC
@@ -175,7 +202,7 @@ sequenceDiagram
     autonumber
     actor You
     participant L as Lead (Opus)
-    participant D as Dev (Sonnet)
+    participant D as Dev lane (Core/Edge: Sonnet, Utility: Haiku)
     participant Q as QA (Sonnet)
     participant O as Ops (Haiku)
     participant GH as GitHub
@@ -185,7 +212,7 @@ sequenceDiagram
     L->>GH: Open spec PR docs/specs/N-*.md (+ ADR if needed)
     L-->>You: APPROVAL_REQ: plan (spec PR #S)
     You->>GH: Approve & merge spec PR  ⟵ GATE 1
-    L->>D: TASK #N (spec path, branch)
+    L->>D: TASK #N to lane by size + paths (spec path, branch)
     D-->>L: ACK (mod)
     D->>GH: Commits on feat/N, open draft PR #M
     GH-->>O: CI events (subscribed)
@@ -200,7 +227,7 @@ sequenceDiagram
     L-->>You: APPROVAL_REQ: merge PR #M
     You->>GH: Merge  ⟵ GATE 2
     O->>GH: Post-merge: release notes, close issue
-    L->>D: archive Dev session (if elastic)
+    L->>D: archive Dev lane session
 ```
 
 ### 5.1 Phases and owners
@@ -223,14 +250,14 @@ sequenceDiagram
   it) revises.
 - **Merge approval = you clicking Merge** on the code PR. Agents are blocked from
   merging by the mod and by branch protection.
-- You can always talk to the Lead directly in the Claude app ("pause Dev-2", "re-plan #14").
+- You can always talk to the Lead directly in the Claude app ("pause Dev-Edge", "re-plan #14").
 
 ### 5.3 Token-saving rules (enforced by the mod or role prompts)
 
 1. **Pointers, not payloads.** Messages cite `#issue`, `#pr`, SHAs and file paths. The receiver pulls only what it needs from GitHub.
 2. **Mod-handled traffic.** `ACK`, `HEARTBEAT`, `ROSTER` and duplicates are consumed by the mod and never reach the model.
 3. **Batched status.** Workers send `STATUS` only at milestones (PR opened, ready for review, done), not per commit.
-4. **Fresh contexts per task.** Elastic Devs are created per issue and archived after merge. Standing sessions `/compact` with "keep: roster, open tasks" between features.
+4. **Fresh contexts per task.** Dev lane sessions are created when their lane has work and archived after merge. Standing sessions `/compact` with "keep: roster, open tasks" between features.
 5. **Stable prompts = cache hits.** Role prompts are passed once via `append_system_prompt` and never edited mid-session, so the prompt prefix stays cacheable.
 6. **Cheap exploration.** Dev and QA use Haiku `Explore` subagents for codebase search and keep only the conclusions.
 7. **Lead reads diffs sparingly.** It reviews specs and `risk:high` PRs only. QA covers the rest.
@@ -240,10 +267,11 @@ sequenceDiagram
 
 | Session | Share of tokens | Share of cost |
 |---|---|---|
-| Dev(s), Sonnet | ~55% | ~45% |
+| Dev-Core + Dev-Edge, Sonnet | ~45% | ~40% |
+| Dev-Utility, Haiku | ~10% | ~3% |
 | QA, Sonnet | ~20% | ~17% |
 | Lead, Opus | ~10% | ~30% |
-| Ops, Haiku | ~15% | ~8% |
+| Ops, Haiku | ~15% | ~10% |
 
 Compared with running every role on Opus, this should cut cost substantially, while
 the work that most affects quality (design and hard reviews) stays on Opus.
@@ -254,7 +282,7 @@ the work that most affects quality (design and hard reviews) stays on Opus.
 
 | Item | Convention |
 |---|---|
-| Labels | `role:dev` `role:qa` `role:ops` · `state:planned` `state:in-progress` `state:review` `state:blocked` · `risk:high` · `needs-approval` |
+| Labels | `lane:core` `lane:edge` `lane:utility` · `size:S` `size:M` `size:L` · `role:qa` `role:ops` · `state:planned` `state:in-progress` `state:review` `state:blocked` · `risk:high` · `needs-approval` |
 | Branches | `spec/<n>-<slug>` (Lead), `feat/<n>-<slug>` / `fix/<n>-<slug>` (Dev) |
 | PR body | `Closes #n`, spec link, test plan, `risk:` label |
 | Branch protection on `main` | 1 human approval, required CI checks, no force push |
@@ -269,8 +297,8 @@ the work that most affects quality (design and hard reviews) stays on Opus.
 2. Start the **Lead** session in the Claude app on this repo with model **Opus 5.5**,
    and paste `docs/sdlc/roles/lead.md` as the first message (or set it as the session's
    appended system prompt).
-3. The Lead reads `docs/sdlc/sdlc.config.json` and spawns QA and Ops (and Dev-1 when the
-   first task is approved) with `create_session`, passing each worker's model and its role file
+3. The Lead reads `docs/sdlc/sdlc.config.json` and spawns QA and Ops (and each dev lane when it
+   first gets an approved task) with `create_session`, passing each worker's model and its role file
    as `append_system_prompt`, then broadcasts `ROSTER`.
 4. The Lead subscribes Ops to open PRs (`subscribe_pr_activity`) as PRs are created.
 5. A daily scheduled task wakes the Lead to post a stand-up digest on the roster issue
@@ -292,7 +320,7 @@ the work that most affects quality (design and hard reviews) stays on Opus.
 
 ## 9. Open decisions (for you)
 
-1. **Dev concurrency cap.** The default is 3. Raise it for throughput or lower it for cost.
+1. **Dev concurrency cap.** Decided: 3, one session per lane (Core, Edge, Utility).
 2. **Release gate.** Should releases and tags also need your approval, or can Ops tag
    after merge?
 3. **Opus deep-review scope.** Is `risk:high` only right, or should every PR touching
@@ -306,5 +334,5 @@ Files in this design:
 
 - `docs/sdlc/DESIGN.md`: this document
 - `docs/sdlc/sdlc.config.json`: roles, models, budgets, guardrails (machine-readable)
-- `docs/sdlc/roles/lead.md`, `developer.md`, `qa.md`, `ops.md`: role prompts
+- `docs/sdlc/roles/lead.md`, `dev-core.md`, `dev-edge.md`, `dev-utility.md`, `qa.md`, `ops.md`: role prompts
 - `docs/sdlc/protocol.md`: DevBus envelope quick reference for agents
