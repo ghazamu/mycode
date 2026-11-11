@@ -502,6 +502,7 @@ Then wait for a TASK. Reply only: "<role> ready".
 Files in this design (work setup):
 
 - `docs/sdlc/DESIGN-work.md`: this document
+- `docs/sdlc/prompts.md`: ready-to-paste setup prompts for the Lead, Dev-Core, Ops and QA terminals
 - `docs/sdlc/SETUP-work.md`: runnable setup (copy kit, start terminals, prompts, tasks S0–S10 for the Lead to dispatch)
 - `docs/sdlc/sdlc.config.json`: roles, models, routing, budgets, session files (ignore its `devbus` section, or map it to Session Bus settings)
 - `docs/sdlc/roles/*.md`: role prompts (they say DevBus/`bus_send`; the setup prompts tell sessions to substitute Session Bus, or rename them via Appendix A)

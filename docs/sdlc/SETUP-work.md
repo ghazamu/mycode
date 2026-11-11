@@ -18,7 +18,7 @@ From the work repo's root, on a new branch:
 git checkout -b sdlc-setup
 git clone --depth 1 -b claude/multi-session-workflow-design-5iqytw https://github.com/ghazamu/mycode /tmp/sdlc-kit
 mkdir -p docs/sdlc .sessions
-cp -r /tmp/sdlc-kit/docs/sdlc/{DESIGN-work.md,SETUP-work.md,protocol.md,sdlc.config.json,roles,templates} docs/sdlc/
+cp -r /tmp/sdlc-kit/docs/sdlc/{DESIGN-work.md,SETUP-work.md,prompts.md,protocol.md,sdlc.config.json,roles,templates} docs/sdlc/
 cp /tmp/sdlc-kit/docs/lessons.md docs/
 cp -r /tmp/sdlc-kit/.sessions/. .sessions/
 mkdir -p docs/sdlc/reference && cp -r /tmp/sdlc-kit/tools/devbus/hooks/lib docs/sdlc/reference/devbus-lib
@@ -56,6 +56,9 @@ config edits within Ops' write scope. QA joins only for S8, when the Lead sends
 Before pasting, replace **`<SEND_TOOL>`** with the tool or command your Session Bus uses to send a
 message, and **`<ASSIGN_ROLE>`** with how it assigns a role. Those are the only two names the
 sessions need from you. Everything else is mapped during setup (S2).
+
+> **Ready-to-paste versions** of these prompts, one per role (Lead, Dev-Core, Ops, QA), are in
+> [`prompts.md`](prompts.md). The two below are the generic templates.
 
 ### Prompt L (Lead, Opus)
 
