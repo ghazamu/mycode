@@ -419,6 +419,9 @@ Rule of thumb: weekly tokens ≈ requests × 464k × 0.90 (routing only), or × 
 
 ## 7. Bootstrapping (terminals)
 
+> **Runnable version:** [`SETUP-work.md`](SETUP-work.md) has the copy commands, the terminal start-up,
+> the Lead and worker prompts, and setup tasks S0–S10 that the Lead dispatches. The steps below are the summary.
+
 1. **Map names.** Fill in Appendix A for the work repo and Session Bus; apply the renames in one
    PR across the kit files (role prompts, `protocol.md`, `sdlc.config.json`, templates).
 2. **Copy the kit** into the work repo: `docs/sdlc/roles/*.md`, `docs/sdlc/protocol.md`,
@@ -499,6 +502,7 @@ Then wait for a TASK. Reply only: "<role> ready".
 Files in this design (work setup):
 
 - `docs/sdlc/DESIGN-work.md`: this document
+- `docs/sdlc/SETUP-work.md`: runnable setup (copy kit, start terminals, prompts, tasks S0–S10 for the Lead to dispatch)
 - `docs/sdlc/sdlc.config.json`: roles, models, routing, budgets, session files (ignore its `devbus` section, or map it to Session Bus settings)
 - `docs/sdlc/roles/*.md`: role prompts (they say DevBus/`bus_send`; the setup prompts tell sessions to substitute Session Bus, or rename them via Appendix A)
 - `docs/sdlc/protocol.md`: message fields and types (read with §4.2)
