@@ -461,6 +461,38 @@
         "package.json"
       ]
     },
-    "releaseApproval": "person runs /devbus-approve-release vX.Y.Z after merging the release PR"
+    "releaseApproval": "person runs /devbus-approve-release vX.Y.Z after merging the release PR",
+    "sessionFileRules": "own .sessions/<role>/ for every role; ops may trim any memory.md; docs/lessons.md Edit by all, Write by ops only"
+  },
+  "sessionFiles": {
+    "handoff": {
+      "path": ".sessions/<role>/handoff.md",
+      "writer": "own session",
+      "when": [
+        "task end",
+        "before compact",
+        "on BUDGET/ESCALATE",
+        "session end"
+      ],
+      "maxLines": 40,
+      "mode": "overwrite"
+    },
+    "memory": {
+      "path": ".sessions/<role>/memory.md",
+      "writer": "own session",
+      "trimmedBy": "ops",
+      "maxLines": 60,
+      "mode": "append, trimmed"
+    },
+    "lessons": {
+      "path": "docs/lessons.md",
+      "writer": "any session (Edit, one line)",
+      "curator": "ops (weekly)",
+      "approver": "lead (process changes)",
+      "maxLines": 100,
+      "readAtStartup": "Active section only"
+    },
+    "templates": "docs/sdlc/templates/",
+    "committed": "with the task PR"
   }
 }

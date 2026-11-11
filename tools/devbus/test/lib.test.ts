@@ -146,6 +146,17 @@ describe('guards', () => {
     expect(ask('dev-core', 'Edit', { file_path: '/repo/anything.py' })).toBe(undefined)
   })
 
+  test('each role writes its own session files; lessons are append-by-Edit', async () => {
+    expect(ask('qa', 'Write', { file_path: '/repo/.sessions/qa/handoff.md' })).toBe(undefined)
+    expect(ask('lead', 'Edit', { file_path: '/repo/.sessions/lead/memory.md' })).toBe(undefined)
+    expect(ask('qa', 'Write', { file_path: '/repo/.sessions/dev-core/handoff.md' })).toHaveProperty('deny')
+    expect(ask('ops', 'Edit', { file_path: '/repo/.sessions/qa/memory.md' })).toBe(undefined)
+    expect(ask('ops', 'Edit', { file_path: '/repo/.sessions/qa/handoff.md' })).toHaveProperty('deny')
+    expect(ask('qa', 'Edit', { file_path: '/repo/docs/lessons.md' })).toBe(undefined)
+    expect(ask('dev-core', 'Write', { file_path: '/repo/docs/lessons.md' })).toHaveProperty('deny')
+    expect(ask('ops', 'Write', { file_path: '/repo/docs/lessons.md' })).toBe(undefined)
+  })
+
   test('lanes warn rather than deny', async () => {
     setScopes({ ...DEFAULT_CONFIG, lanePaths: { core: ['flaskapi/**'], edge: [] } })
     expect(ask('dev-core', 'Edit', { file_path: '/repo/marvel/charc.py' })).toHaveProperty('warn')

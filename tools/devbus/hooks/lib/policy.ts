@@ -300,7 +300,7 @@ export function guard(input: GuardInput): GuardResult {
   if (FILE_TOOLS.includes(tool) && role) {
     const raw = String(args.file_path ?? args.notebook_path ?? '')
     if (raw) {
-      return fileScope(role, relativePath(raw, input.root))
+      return fileScope(role, relativePath(raw, input.root), tool)
     }
   }
   return undefined
@@ -315,8 +315,34 @@ export function setScopes(config: BusConfig): void {
   activeLanes = config.lanePaths
 }
 
-function fileScope(role: Role, path: string): GuardResult {
+export const SESSIONS_DIR = '.sessions'
+export const LESSONS_FILE = 'docs/lessons.md'
+
+/**
+ * Session files (DESIGN.md §2B): every role writes its own `.sessions/<role>/`
+ * (Ops may also trim others' memory). Everyone may add to docs/lessons.md with
+ * Edit; only Ops may rewrite it whole (Write) when it curates.
+ */
+function sessionFileScope(role: Role, path: string, tool: string): GuardResult | 'not-session-file' {
+  if (path === LESSONS_FILE) {
+    if (tool === 'Write' && role !== 'ops') {
+      return { deny: `only Ops rewrites ${LESSONS_FILE}; add a line with Edit instead` }
+    }
+    return undefined
+  }
+  if (path.startsWith(`${SESSIONS_DIR}/`)) {
+    const owner = path.split('/')[1] ?? ''
+    if (owner === role) return undefined
+    if (role === 'ops' && path.endsWith('/memory.md')) return undefined
+    return { deny: `${path} belongs to ${owner || 'another role'}; write only ${SESSIONS_DIR}/${role}/` }
+  }
+  return 'not-session-file'
+}
+
+function fileScope(role: Role, path: string, tool: string): GuardResult {
   if (path.startsWith('/') || path.startsWith('..')) return undefined // outside the repo: not ours
+  const session = sessionFileScope(role, path, tool)
+  if (session !== 'not-session-file') return session
   const scope = activeScopes[role]
   if (scope && !matchesAny(path, scope)) {
     return { deny: `${role} may not edit ${path}; its scope is ${scope.join(', ')}` }

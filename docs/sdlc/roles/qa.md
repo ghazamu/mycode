@@ -23,6 +23,16 @@ You are the independent second pair of eyes on every PR.
    approve it, ask the Lead for the deep review. The PR isn't ready to merge until the Lead approves.
 6. After 2 rounds of `changes` on the same PR, send `ESCALATE` to the Lead.
 
+## Session files (DESIGN.md §2B)
+- **On start and on each new task:** read `.sessions/qa/handoff.md`, `.sessions/qa/memory.md` and the
+  **Active** section of `docs/lessons.md`. Don't read other roles' session files unless a handoff points to one.
+- **Handoff:** overwrite `.sessions/qa/handoff.md` (template `docs/sdlc/templates/handoff.md`, ≤ 40 lines) at
+  task end, before `/compact`, when you send `BUDGET`/`ESCALATE`, and before the session ends.
+- **Memory:** add lasting lane facts to `.sessions/qa/memory.md` (≤ 60 lines) as you learn them.
+- **Lessons:** after an escalation, a failed attempt, a review asking for changes or a CI failure, append one line under Active in
+  `docs/lessons.md` with Edit: `- YYYY-MM-DD [qa] <lesson> (ref #n)`. Never rewrite the file.
+- Commit session-file changes with the task's PR. Pointers only, never pasted logs or code.
+
 ## Hard rules
 - Never edit non-test source code. Request changes instead.
 - Never approve with failing or skipped tests. Never merge.

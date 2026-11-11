@@ -23,6 +23,16 @@ exploring. Compact at ~60k context. If you hit the budget, stop and send `BUDGET
 7. After 2 failed attempts at the same problem, send `ESCALATE` to the Lead.
 8. When the user has merged, send `DONE` to the Lead.
 
+## Session files (DESIGN.md §2B)
+- **On start and on each new task:** read `.sessions/dev-core/handoff.md`, `.sessions/dev-core/memory.md` and the
+  **Active** section of `docs/lessons.md`. Don't read other roles' session files unless a handoff points to one.
+- **Handoff:** overwrite `.sessions/dev-core/handoff.md` (template `docs/sdlc/templates/handoff.md`, ≤ 40 lines) at
+  task end, before `/compact`, when you send `BUDGET`/`ESCALATE`, and before the session ends.
+- **Memory:** add lasting lane facts to `.sessions/dev-core/memory.md` (≤ 60 lines) as you learn them.
+- **Lessons:** after an escalation, a failed attempt, a review asking for changes or a CI failure, append one line under Active in
+  `docs/lessons.md` with Edit: `- YYYY-MM-DD [dev-core] <lesson> (ref #n)`. Never rewrite the file.
+- Commit session-file changes with the task's PR. Pointers only, never pasted logs or code.
+
 ## Hard rules
 - Stay in your issue's scope and your lane's folders (the mod warns on edits outside the lane). Raise follow-ups as new issues via the Lead.
 - Never merge, never push to main, never force-push, never skip or disable tests.

@@ -136,6 +136,41 @@ of a request's tokens for each small task.
 
 ---
 
+## 2B. Session files: handoff, memory and lessons
+
+Each session writes its **own** handoff and memory. It already holds the context, so a
+few lines cost almost nothing. Sending that context to another session to write it down
+would cost more tokens than writing it directly. The shared lessons file has one curator.
+
+| File | Who writes it | When | Who tidies it | Size cap |
+|---|---|---|---|---|
+| `.sessions/<role>/handoff.md` | The session itself | End of each task, before `/compact`, on `BUDGET`/`ESCALATE`, and before the session ends | Overwritten each time; no tidying | ~40 lines |
+| `.sessions/<role>/memory.md` | The session itself | When it learns a lasting fact about its lane: conventions, gotchas, commands that work | Ops trims it past the cap | ~60 lines |
+| `docs/lessons.md` (shared) | Any session adds one line (Edit, never a full rewrite) | After an escalation, a failed attempt, a review asking for changes, or a CI failure | Ops removes duplicates and merges entries weekly; the Lead approves lessons that change process or role prompts | ~100 lines |
+
+**Reading rules (token budget):**
+- At startup, and when it takes a new task, a session reads its own `handoff.md` and `memory.md`, plus
+  the **Active** section of `docs/lessons.md`. It doesn't read other roles' session files unless a
+  handoff from that role points to one.
+- Files stay short because every session reads them at startup and each later turn re-reads its context.
+  Pointers (paths, PR numbers, commits) are used instead of copied content, as on the bus.
+
+**Formats** (templates in `docs/sdlc/templates/`):
+- `handoff.md`: task and status · done (with commits and PRs) · next steps · open questions · files touched · tokens used/budget.
+- `memory.md`: bullet facts grouped as *Conventions*, *Gotchas*, *Commands*, each with a date or PR reference.
+- `lessons.md`: `- YYYY-MM-DD [role] <lesson> (ref #issue/#pr)`, under **Active** (read by
+  everyone) and **Archive** (kept, not read at startup). The Lead turns process lessons into changes to the role prompts.
+
+**Where they live in git:** session files are committed with the task's PR, so the next
+session, or a new terminal, sees them. Each role owns its own folder, so merge conflicts are
+rare. `docs/lessons.md` takes only appended lines between Ops' weekly curation PRs.
+
+**Enforced by DevBus:** every role may write `.sessions/<own role>/`. Ops may also trim
+other roles' `memory.md`. Every role may `Edit` `docs/lessons.md`, but only Ops may rewrite it whole
+(`Write`). Writes to another role's session folder are denied.
+
+---
+
 ## 3. Architecture
 
 ```mermaid
@@ -211,7 +246,7 @@ functions), `hooks/register.tsx` (hooks, tools, commands, pane).
 | `session.send` | Refuses the model's raw SendMessage when it has no envelope ("use bus_send"). Scrubs secret-like values from every outgoing message. |
 | `session.receive` | Parses envelopes and drops duplicate ids. **Consumes** `ACK`, `HEARTBEAT`, `ROSTER` and `STATUS`, so no model turn is spent on them. Auto-ACKs a `TASK` and starts its token count. Shortens everything else before the model reads it. The Lead's copy records `tokens=` from `DONE` messages for team-wide usage. |
 | `turn.step` | Adds every response's usage (uncached + cache write + cache read + output) to the current request. At 80% of its budget it shows a toast. At 100% it sends `BUDGET` to the Lead and blocks further tool calls except the bus. |
-| `tool.call` guards | For every role: blocks merge and auto-merge, `gh pr merge`, force-push and push to `main`/`master`. Tags and releases (`git tag`, `gh release create`, GitHub release tools) are allowed only for Ops and only after the person runs `/devbus-approve-release <tag>`. Session management is Lead-only. Per-role write scopes (Lead: specs, ADRs, sdlc docs; QA: test files; Ops: docs, changelog, `.github`, version files). Dev lanes get a warning (not a denial) for edits outside `devbus.lanePaths`. |
+| `tool.call` guards | Session files per §2B (own `.sessions/<role>/`; `docs/lessons.md` by Edit, whole rewrite by Ops only). For every role: blocks merge and auto-merge, `gh pr merge`, force-push and push to `main`/`master`. Tags and releases (`git tag`, `gh release create`, GitHub release tools) are allowed only for Ops and only after the person runs `/devbus-approve-release <tag>`. Session management is Lead-only. Per-role write scopes (Lead: specs, ADRs, sdlc docs; QA: test files; Ops: docs, changelog, `.github`, version files). Dev lanes get a warning (not a denial) for edits outside `devbus.lanePaths`. |
 | Router (Lead) | Every `routerPollMinutes`, it lists open `state:planned` issues through the GitHub MCP server and routes them by label (§2A), batching `size:S` per `area:*` or lane. It spawns missing sessions with `create_session` on the configured model and role prompt when `autoSpawn` is on, sends `TASK` with `kind` and `budget`, and relabels issues `state:in-progress` + `routed:<role>`. Design and labelling tasks for the Lead itself arrive as a prompt. No model turn is spent on routing. |
 | UI | **Board pane**: role, current task with tokens/budget, roster with last-seen and STALE flags, message feed. **Status line**: `devbus · role · #task · tokens/budget`. **Toasts** on `APPROVAL_REQ`, `BLOCKED`, `BUDGET` and lane warnings. |
 | Commands | `/devbus`, `/devbus-role <role>`, `/devbus-roster <role> <session_id>`, `/devbus-approve-release vX.Y.Z` (accepted only from the person's own input, not the model), `/devbus-usage` (avg tokens per request kind vs. the 464k baseline), `/devbus-route`. |
@@ -452,3 +487,4 @@ Files in this design:
 - `tools/devbus/`: the DevBus mod (README, hooks, tests); `.claude-plugin/marketplace.json` and `.claude/settings.json` install it
 - `docs/sdlc/roles/lead.md`, `dev-core.md`, `dev-edge.md`, `dev-utility.md`, `qa.md`, `ops.md`: role prompts
 - `docs/sdlc/protocol.md`: DevBus envelope quick reference for agents
+- `docs/sdlc/templates/`: handoff, memory and lessons templates (§2B); `docs/lessons.md`: the shared lessons file
