@@ -5,7 +5,7 @@ terminals and paste one prompt. Then the **Lead (Opus)** reviews the design and 
 remaining setup task to the session that should do it, over Session Bus. You approve the plan
 and the PRs, and do the few steps only a person can do.
 
-**Your steps:** step 0 (copy the kit) and step 1 (start four terminals), then answer the Lead
+**Your steps:** step 0 (copy the kit) and step 1 (start three terminals: Opus, Sonnet, Haiku), then answer the Lead
 when it asks for approvals, a `START_SESSION`, or one of the person-only steps marked 👤 in the task list.
 
 ---
@@ -37,7 +37,6 @@ and branch so terminals don't switch branches under each other:
 
 ```bash
 git worktree add -b sdlc-setup-dev-core    ../<repo>-dev-core    sdlc-setup
-git worktree add -b sdlc-setup-dev-utility ../<repo>-dev-utility sdlc-setup
 git worktree add -b sdlc-setup-ops         ../<repo>-ops         sdlc-setup
 ```
 
@@ -47,11 +46,12 @@ Workers create a branch per task from there; the worktree branch is only their s
 |---|---|---|---|
 | Lead | the repo folder | `claude --model claude-opus-5-5` | Assign role `lead` in Session Bus, paste **Prompt L** |
 | Dev-Core | `../<repo>-dev-core` | `claude --model claude-sonnet-5-5` | Assign role `dev-core`, paste **Prompt W** |
-| Dev-Utility | `../<repo>-dev-utility` | `claude --model claude-haiku-5-5` | Assign role `dev-utility`, paste **Prompt W** |
 | Ops | `../<repo>-ops` | `claude --model claude-haiku-5-5` | Assign role `ops`, paste **Prompt W** |
 
-QA and Dev-Edge aren't needed until the Lead asks (`START_SESSION`). QA reviews the Session Bus
-code in S8, and Dev-Edge is only needed after setup. Use the model names your organization shows in `/model`.
+**Three terminals are enough for setup.** Ops (Haiku) also takes the Haiku setup tasks that
+would normally go to Dev-Utility (S3, S4 utility map), since during setup they're all doc and
+config edits within Ops' write scope. QA joins only for S8, when the Lead sends
+`START_SESSION qa`. Dev-Utility and Dev-Edge start after setup, when real work needs them. Use the model names your organization shows in `/model`.
 
 Before pasting, replace **`<SEND_TOOL>`** with the tool or command your Session Bus uses to send a
 message, and **`<ASSIGN_ROLE>`** with how it assigns a role. Those are the only two names the
@@ -60,12 +60,12 @@ sessions need from you. Everything else is mapped during setup (S2).
 ### Prompt L (Lead, Opus)
 
 ```
-You are the LEAD of a multi-session Claude dev team for this repository, running in its own terminal. Other sessions run in their own terminals and talk over Session Bus: send with <SEND_TOOL>; roles are assigned with <ASSIGN_ROLE>. Running now: lead, dev-core (Sonnet), dev-utility (Haiku), ops (Haiku). You cannot start sessions: ask me with START_SESSION role=<role> model=<model> reason=<task id>.
+You are the LEAD of a multi-session Claude dev team for this repository, running in its own terminal. Other sessions run in their own terminals and talk over Session Bus: send with <SEND_TOOL>; roles are assigned with <ASSIGN_ROLE>. Running now: lead, dev-core (Sonnet), ops (Haiku). During setup, ops also takes the Haiku tasks listed for dev-utility. You cannot start sessions: ask me with START_SESSION role=<role> model=<model> reason=<task id>.
 
 Your job now is to implement docs/sdlc/DESIGN-work.md by running the setup in docs/sdlc/SETUP-work.md.
 
 1. Read docs/sdlc/SETUP-work.md fully, then docs/sdlc/DESIGN-work.md. Don't read other files unless a task needs them.
-2. Task S0 (yours): review DESIGN-work.md. Write docs/sdlc/setup-review.md as a findings list (section, problem, severity, proposed fix), not a rewrite, then tell me it's ready. Wait for my approval before changing anything or dispatching tasks.
+2. Task S0 (yours): review DESIGN-work.md and SETUP-work.md (including whether the setup tasks fully implement the design). Write docs/sdlc/setup-review.md as a findings list (section, problem, severity, proposed fix), not a rewrite, then tell me it's ready. Wait for my approval before changing anything or dispatching tasks.
 3. After I approve: create docs/sdlc/setup-status.md from section 3 of SETUP-work.md (one row per task: id, owner, status, PR, tokens). Dispatch tasks in dependency order with <SEND_TOOL>: type=TASK, from=lead, to=<owner>, task=<id>, and a summary of at most 600 characters that points to the task's row in SETUP-work.md section 3. Never paste the task text; the owner reads it from the file.
 4. Track replies, update setup-status.md, unblock with decisions, and send me APPROVAL_REQ for each PR and for each step marked 👤.
 5. Keep your context small: read diffs only for the review checkpoints listed in section 3. Write .sessions/lead/handoff.md at each milestone.
@@ -73,7 +73,7 @@ Your job now is to implement docs/sdlc/DESIGN-work.md by running the setup in do
 Never merge, never push to the protected branch, never bypass my approvals. Ask me only for decisions or approvals, with options A/B and a recommendation.
 ```
 
-### Prompt W (workers: Dev-Core, Dev-Utility, Ops; later QA, Dev-Edge)
+### Prompt W (workers: Dev-Core and Ops for setup; later QA, Dev-Utility, Dev-Edge)
 
 ```
 You are the <ROLE> session of a multi-session Claude dev team for this repository, running in its own terminal. Sessions talk over Session Bus: send with <SEND_TOOL>. The Lead (Opus) coordinates.
@@ -91,7 +91,7 @@ Reply only: "<role> ready".
 
 ## 2. What happens next (no action from you except approvals)
 
-1. The Lead writes `docs/sdlc/setup-review.md` (task S0) and asks you to approve it. Read it, approve or comment.
+1. The Lead reviews both docs and writes `docs/sdlc/setup-review.md` (task S0), then asks you to approve it. Read it, approve or comment.
 2. The Lead dispatches S1–S10 in order, tracks them in `docs/sdlc/setup-status.md`, and sends you an
    `APPROVAL_REQ` for each PR and each 👤 step.
 3. When S10 passes, the setup is done. The pilot (DESIGN-work.md §5.5) starts with real requests.
@@ -104,11 +104,11 @@ Budgets are per task, in tokens. "Review" means who checks the output before you
 
 | ID | Task | Owner (model) | Depends on | Inputs | Output / done when | Budget | Review |
 |---|---|---|---|---|---|---|---|
-| **S0** | Review the design: gaps, contradictions, risks for this repo and Session Bus | lead (Opus) | — | `DESIGN-work.md` | `docs/sdlc/setup-review.md`, a findings list approved by you 👤 | 300k | you |
+| **S0** | Review the design and this setup: gaps, contradictions, risks for this repo and Session Bus; check that S1–S10 fully implement the design | lead (Opus) | — | `DESIGN-work.md`, `SETUP-work.md` | `docs/sdlc/setup-review.md`, a findings list approved by you 👤 | 300k | you |
 | **S1** | Audit Session Bus against R1–R9: what it already does, the tool or command names, and what's missing | dev-core (Sonnet) | S0 | Session Bus source or docs; DESIGN-work.md §4 | `docs/sdlc/session-bus-audit.md`: one row per R with *has / partial / missing*, the name, and evidence (file:line) | 400k | lead |
 | **S2** | Fill in Appendix A for this repo: A.1–A.3 from the repo's conventions, A.4 from the S1 audit | dev-core (Sonnet) | S1 | DESIGN-work.md Appendix A; S1 audit; repo layout (labels, branches, docs folders) | Appendix A **Your setup** column filled; open questions listed for the Lead | 300k | lead decides open questions; you approve the PR 👤 |
-| **S3** | Apply the mapping: rename paths, labels, tools and commands across the kit | dev-utility (Haiku) | S2 merged | Appendix A (filled); `docs/sdlc/roles/*.md`, `protocol.md`, `sdlc.config.json`, `templates/`, `SETUP-work.md` prompts | Every old name replaced; `grep` for each old name returns nothing (list the commands in the PR) | 300k | lead (skim) |
-| **S4** | Write lane repo maps for this repo: `core.md`, `edge.md`, `utility.md` + `README.md`, ≤ 60 lines each; set `lanePaths` in config | dev-core (Sonnet) writes core + edge; dev-utility (Haiku) writes utility | S2 merged | Repo tree; `docs/sdlc/roles/dev-*.md`; old maps as format examples (kit `docs/sdlc/repo-map/`) | Maps committed; every top-level folder belongs to exactly one lane | 400k (core+edge), 150k (utility) | lead |
+| **S3** | Apply the mapping: rename paths, labels, tools and commands across the kit | ops (Haiku) during setup | S2 merged | Appendix A (filled); `docs/sdlc/roles/*.md`, `protocol.md`, `sdlc.config.json`, `templates/`, `SETUP-work.md` prompts | Every old name replaced; `grep` for each old name returns nothing (list the commands in the PR) | 300k | lead (skim) |
+| **S4** | Write lane repo maps for this repo: `core.md`, `edge.md`, `utility.md` + `README.md`, ≤ 60 lines each; set `lanePaths` in config | dev-core (Sonnet) writes core + edge; ops (Haiku) writes utility during setup | S2 merged | Repo tree; `docs/sdlc/roles/dev-*.md`; old maps as format examples (kit `docs/sdlc/repo-map/`) | Maps committed; every top-level folder belongs to exactly one lane | 400k (core+edge), 150k (utility) | lead |
 | **S5** | Repo plumbing: create the labels (DESIGN-work §6), add Claude Code permission rules denying merge, force-push and protected-branch push, add `CHANGELOG.md` if missing, keep `.sessions/` and templates | ops (Haiku) | S3 merged | DESIGN-work §6, §7 step 5; Appendix A.2–A.3 | Labels exist (`gh label list`); `.claude/settings.json` deny rules in a PR | 200k | lead |
 | **S6** 👤 | Protect the main branch: 1 human approval, required CI, no force push | **you** | — | DESIGN-work §6 | Branch protection on | — | — |
 | **S7** | Close Session Bus gaps: for each R marked *partial/missing* in S1 that the Lead decides to build, port from `docs/sdlc/reference/devbus-lib` (`envelope.ts`, `policy.ts`) into Session Bus, with tests | dev-core (Sonnet) | S1, Lead's build list | S1 audit; reference lib; Session Bus source | One PR per requirement; tests pass; requirements not built have their fallback noted in DESIGN-work §4 | 600k per requirement | QA (S8) |
@@ -120,7 +120,7 @@ Budgets are per task, in tokens. "Review" means who checks the output before you
 for any requirement where Session Bus already passes, or where the Lead chooses the fallback.
 
 **Expected setup cost** (estimate): ~4–7M tokens in total, roughly 10% on Opus (S0, reviews, S10
-coordination), 70% Sonnet (S1, S2, S4, S7, S8), 20% Haiku (S3, S4 utility, S5, S9).
+coordination), 70% Sonnet (S1, S2, S4, S7, S8), 20% Haiku (S3, S4 utility, S5, S9, all on the Ops terminal).
 
 ---
 
