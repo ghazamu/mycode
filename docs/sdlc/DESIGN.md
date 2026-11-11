@@ -9,6 +9,9 @@ of Claude Code cloud sessions works together like a dev team. Each session has i
 role and model, and they coordinate through **DevBus**, a mod built on Claude's native
 session bus. GitHub stays the single source of truth for every artifact.
 
+> **Work setup:** for terminal-only sessions that use the work's existing **Session Bus** instead of
+> DevBus, see [`DESIGN-work.md`](DESIGN-work.md).
+
 ---
 
 ## 1. Design goals
@@ -482,6 +485,7 @@ token saving comes from lean mode: batching, budgets and small contexts. The
 Files in this design:
 
 - `docs/sdlc/DESIGN.md`: this document
+- `docs/sdlc/DESIGN-work.md`: work-setup copy (terminals + Session Bus)
 - `docs/sdlc/sdlc.config.json`: roles, models, routing, budgets, guardrails (machine-readable)
 - `docs/sdlc/repo-map/{core,edge,utility}.md`: short per-lane repo maps for this repo
 - `tools/devbus/`: the DevBus mod (README, hooks, tests); `.claude-plugin/marketplace.json` and `.claude/settings.json` install it
