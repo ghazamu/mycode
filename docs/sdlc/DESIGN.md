@@ -174,6 +174,32 @@ other roles' `memory.md`. Every role may `Edit` `docs/lessons.md`, but only Ops 
 
 ---
 
+## 2C. Test ownership and mutation testing
+
+**Who does what with tests**
+- **Devs** run the tests related to their change while working, plus the full suite once before
+  marking a PR ready, and write the tests that come with their change. Once per new test they may
+  check it fails without their change (break or revert once, see it fail, restore). Devs never do
+  mutation testing, never plant bugs, and never write test plans or design plans. They use the spec's
+  test plan, or send `BLOCKED` to the Lead if there isn't one.
+- **The Lead** writes the test plan as part of the spec.
+- **QA** adds acceptance and edge-case tests and owns test-quality checks, including mutation testing.
+
+**Mutation testing (QA)**
+
+| Item | Rule |
+|---|---|
+| How | A mutation-testing tool, never a model writing mutants by hand: `mutmut` or `cosmic-ray` (Python), Stryker (JS/TS), PIT (Java), `cargo-mutants` (Rust). Use the repo's existing tool if it has one |
+| Scope | Only the files the PR changes, never the whole repo |
+| When | `size:M`, `size:L` and every `review:opus` PR; never `size:S` |
+| What QA reads | The summary only: mutation score plus surviving mutants as file:line and the change. Never full logs |
+| Threshold | ≥ 70% of mutants killed in changed code (`mutationTesting.minKillRate`). Below it, QA sends `REVIEW_RESULT` changes pointing at the surviving mutants that matter, and the dev adds tests |
+| Safety | The tool mutates in memory or in a temporary copy. Nothing mutated is ever committed |
+| Budget | Inside QA's review budget: the tool run costs almost no tokens, reading the summary a few thousand |
+| CI | Optional: Ops can run the tool in CI on changed files; QA still interprets the result |
+
+---
+
 ## 3. Architecture
 
 ```mermaid
@@ -346,7 +372,7 @@ sequenceDiagram
 | 2. Design | Lead | Spec PR: `docs/specs/<n>-<slug>.md` (interfaces, data model, test plan, task split), optional `docs/adr/NNNN-*.md` | **You approve and merge the spec PR** |
 | 3. Build | Dev(s) | Feature branch + draft PR referencing the issue | — |
 | 4. CI | Ops | Green checks. Trivial fixes committed by Ops | — |
-| 5. Test & review | QA | Test commits + PR review (approve or changes) | QA approval required |
+| 5. Test & review | QA | Test commits + PR review (approve or changes); mutation score on changed files for M/L and `review:opus` PRs (§2C) | QA approval required |
 | 6. Docs | Ops (scribe) | `CHANGELOG.md`, README/docs updates on the same PR | — |
 | 7. Merge | **You** | Merged PR | **You merge** |
 | 8. Release | Lead decides when; Ops prepares | Release PR `release/vX.Y.Z` (version bump, `CHANGELOG.md`, release notes). After merge: tag + GitHub release | **You approve and merge the release PR** |
@@ -540,6 +566,7 @@ prompts, config and guards all use the same names. Leave a row as `same` when th
 | Feature / fix branch | `feat/<n>-<slug>`, `fix/<n>-<slug>` | | §6; config `branchPattern`; dev role prompts | |
 | Release branch / tag | `release/vX.Y.Z` / `vX.Y.Z` (semver) | Tag only after the release PR is merged and the person runs `/devbus-approve-release` | §5.1; `ops.md`; config `release` | |
 | Protected branch | `main` (and `master`) | No direct push or force-push | §6; DevBus `bashDeny` in `policy.ts` | |
+| Mutation testing | tool per language (`mutmut`/`cosmic-ray`, Stryker, PIT, `cargo-mutants`), changed files only, ≥ 70% killed | QA owns; `size:M`/`size:L`/`review:opus` PRs | §2C; config `mutationTesting`; `qa.md`, `ops.md` | |
 
 ### A.3 Roles, models and labels
 

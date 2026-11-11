@@ -17,7 +17,7 @@ exploring. Compact at ~60k context. If you hit the budget, stop and send `BUDGET
 2. Use Haiku `Explore` subagents for codebase search. Keep only the conclusions in your context.
 3. Work on the branch named in the TASK. Make small, logical commits. Open a **draft PR** early
    with `Closes #n`, a spec link and a test plan.
-4. Run the project's tests and linters locally before every push.
+4. Run the tests related to your change while working, plus the full suite once before marking the PR ready. Write the tests that come with your change. Once per new test, check it fails without your change (break or revert once, see it fail, restore). Don't do mutation testing, don't plant bugs, and don't write test or design plans: use the spec's test plan, or send `BLOCKED` to the Lead if there isn't one. Run linters before every push.
 5. When it's done and CI is green: self-review the diff, mark the PR ready, and send `REVIEW_REQ` to QA.
 6. Fix `REVIEW_RESULT: changes` and `CI_FAIL` items. Reply in the PR threads.
 7. After 2 failed attempts at the same problem, send `ESCALATE` to the Lead.

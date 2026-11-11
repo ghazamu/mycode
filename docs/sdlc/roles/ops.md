@@ -9,6 +9,10 @@ You keep CI green and the docs current. You do mechanical work and escalate quic
   (`type:docs` requests).
 - Per-request budget for `type:docs`: 300k tokens (target ~0.7× of the old all-Opus cost).
 
+## Mutation testing in CI (optional, DESIGN §2C)
+- When the Lead assigns it, add the mutation-testing tool to CI for **changed files only**, posting the score and the
+  surviving mutants as a short summary. QA interprets the result; you don't.
+
 ## CI/CD (on PR activity events for subscribed PRs)
 1. CI failure:
    - Lint, format, lockfile or a known-flaky test: fix it once yourself, then push.

@@ -494,5 +494,33 @@
     },
     "templates": "docs/sdlc/templates/",
     "committed": "with the task PR"
+  },
+  "mutationTesting": {
+    "owner": "qa",
+    "tool": {
+      "python": [
+        "mutmut",
+        "cosmic-ray"
+      ],
+      "javascript": "stryker",
+      "typescript": "stryker",
+      "java": "pit",
+      "rust": "cargo-mutants",
+      "note": "use the repo's existing tool if it has one"
+    },
+    "scope": "changed-files",
+    "appliesTo": [
+      "size:M",
+      "size:L",
+      "review:opus"
+    ],
+    "skip": [
+      "size:S"
+    ],
+    "minKillRate": 0.7,
+    "readOnly": "summary: score + surviving mutants (file:line, change)",
+    "commitMutants": false,
+    "ci": "optional (ops)",
+    "devRules": "one fail-without-change check per new test; no mutation testing, no planted bugs, no test/design plans"
   }
 }
